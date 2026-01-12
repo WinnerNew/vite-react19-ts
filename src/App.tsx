@@ -130,7 +130,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full justify-center bg-zinc-950 overflow-hidden">
       {/* 模拟手机容器 */}
-      <div className="relative flex h-full w-full max-w-[450px] flex-col border-x border-zinc-900 bg-black shadow-2xl overflow-hidden">
+      <div className="relative flex h-full w-full  flex-col border-x border-zinc-900 bg-black shadow-2xl overflow-hidden">
         {/* 内容滚动区域 */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
           <AnimatePresence mode="wait">
