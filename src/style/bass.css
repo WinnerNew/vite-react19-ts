@@ -1,0 +1,66 @@
+:root {
+  color-scheme: dark;
+  --bg-black: #000000;
+  --zinc-900: #18181b;
+  --zinc-800: #27272a;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-black);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Base image containment */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  -webkit-user-drag: none;
+}
+
+/* Scrollbar reset */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Fix potential text overflow in flex containers */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Prevent accidental lateral swipe navigation on some browsers */
+#root {
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+@layer base {
+  body {
+    /* @apply bg-zinc-950 text-zinc-100 antialiased selection:bg-sky-500/30; */
+    overflow: hidden; /* 防止外部容器滚动 */
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 移动端视口高度适配 */
+.h-screen-safe {
+  height: 100vh;
+  height: 100dvh;
+}
