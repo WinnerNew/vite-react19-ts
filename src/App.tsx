@@ -153,7 +153,7 @@ const App: React.FC = () => {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => setCurrentView("CREATE_POST")}
-            className="absolute bottom-20 right-5 z-50 rounded-full bg-sky-500 p-4 text-white shadow-lg shadow-sky-500/30 transition-transform active:bg-sky-600"
+            className="absolute bottom-40 right-5 z-50 rounded-full bg-sky-500 p-4 text-white shadow-lg shadow-sky-500/30 transition-transform active:bg-sky-600"
           >
             <Plus size={24} strokeWidth={3} />
           </motion.button>

@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
   console.log("Loaded env:", env);
   return {
+    server: {
+      port: Number(env.VITE_PORT) || 3000,
+      open: true,
+      host: true,
+    },
     plugins: [
       react({
         babel: {
