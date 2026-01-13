@@ -130,7 +130,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full justify-center bg-zinc-950 overflow-hidden">
       {/* 模拟手机容器 */}
-      <div className="relative flex h-full w-full max-w-[450px] flex-col border-x border-zinc-900 bg-black shadow-2xl overflow-hidden">
+      <div className="relative flex h-full w-full  flex-col border-x border-zinc-900 bg-black shadow-2xl overflow-hidden">
         {/* 内容滚动区域 */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
           <AnimatePresence mode="wait">
@@ -141,6 +141,7 @@ const App: React.FC = () => {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="min-h-full"
+              style={{ paddingBottom: "52px" }}
             >
               {renderView()}
             </motion.div>
@@ -160,7 +161,7 @@ const App: React.FC = () => {
 
         {/* 固定底部导航栏 */}
         {hasNavbar && (
-          <nav className="flex w-full items-center justify-around border-t border-zinc-900 bg-black/90 pb-[env(safe-area-inset-bottom,12px)] backdrop-blur-xl z-50">
+          <nav className="fixed bottom-0 flex w-full items-center justify-around border-t border-zinc-900 bg-black/90 pb-[env(safe-area-inset-bottom,12px)] backdrop-blur-xl z-50">
             <NavItem icon={Home} view="HOME" />
             <NavItem icon={Search} view="EXPLORE" />
             <NavItem icon={Bell} view="NOTIFICATIONS" />
