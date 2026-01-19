@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   username: string;
@@ -37,15 +36,15 @@ export interface Chat {
   unreadCount: number;
 }
 
-export type ViewState = 
-  | 'HOME' 
-  | 'EXPLORE' 
-  | 'NOTIFICATIONS' 
-  | 'MESSAGES' 
-  | 'PROFILE' 
-  | 'CHAT' 
-  | 'AUTH' 
-  | 'SETTINGS' 
-  | 'SYSTEM_SETTINGS'
-  | 'CREATE_POST'
-  | 'EDIT_PROFILE';
+export type ViewState =
+  | "HOME"
+  | "EXPLORE"
+  | "NOTIFICATIONS"
+  | "MESSAGES"
+  | "PROFILE"
+  | "CHAT"
+  | "AUTH"
+  | "SETTINGS"
+  | "SYSTEM_SETTINGS"
+  | "CREATE_POST"
+  | "EDIT_PROFILE";
