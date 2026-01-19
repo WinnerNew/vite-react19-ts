@@ -191,16 +191,4 @@ const App: React.FC = () => {
   );
 };
 
-let mm: any = 1;
-mm = 2;
-console.log(mm);
-
-let nn: unknown;
-nn = 2;
-nn = null;
-nn = "1";
-let a: string;
-a = "2";
-a = nn as string;
-console.log(typeof nn, typeof a);
 export default App;
