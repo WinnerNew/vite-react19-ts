@@ -13,7 +13,6 @@ import SystemSettingsView from "./views/SystemSettingsView";
 import CreatePostView from "./views/CreatePostView";
 import EditProfileView from "./views/EditProfileView";
 import { User as UserType, ViewState } from "./types";
-
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>("AUTH");
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -147,6 +146,13 @@ const App: React.FC = () => {
             </motion.div>
           </AnimatePresence>
         </div>
+
+        <a
+          className="flex justify-center py-2 text-xs text-zinc-500"
+          href="https://app.gjzwfw.gov.cn/jmopen/webapp/html5/fjyxhlwxxfwbacx/index.html"
+        >
+          湘ICP备2024040499号-2
+        </a>
 
         {/* 悬浮发布按钮 (仅在有 Navbar 时显示) */}
         {hasNavbar && (
