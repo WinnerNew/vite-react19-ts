@@ -88,7 +88,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
       <a
         className="flex justify-center py-2 text-xs text-zinc-500"
-        href="https://app.gjzwfw.gov.cn/jmopen/webapp/html5/fjyxhlwxxfwbacx/index.html"
+        href="https://beian.miit.gov.cn/"
       >
         湘ICP备2024040499号-2
       </a>
