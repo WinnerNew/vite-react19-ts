@@ -12,6 +12,7 @@ import SettingsView from "./views/SettingsView";
 import SystemSettingsView from "./views/SystemSettingsView";
 import CreatePostView from "./views/CreatePostView";
 import EditProfileView from "./views/EditProfileView";
+import { userApi } from "./services/api";
 import { User as UserType, ViewState } from "./types";
 
 const App: React.FC = () => {
@@ -29,9 +30,20 @@ const App: React.FC = () => {
     setCurrentView("AUTH");
   };
 
-  const handleUpdateUser = (updatedUser: UserType) => {
-    setCurrentUser(updatedUser);
-    setCurrentView("PROFILE");
+  const handleUpdateUser = async (updatedUser: UserType) => {
+    try {
+      const response = await userApi.updateProfile(
+        updatedUser.bio || '',
+        updatedUser.location || '',
+        updatedUser.website || '',
+        updatedUser.avatar
+      );
+      setCurrentUser(response);
+      setCurrentView("PROFILE");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      // 可以添加错误提示
+    }
   };
 
   const renderView = () => {

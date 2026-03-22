@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Info, Image, Gift, Smile, Send } from 'lucide-react';
+import { messageApi } from '../services/api';
 import { Message } from '../types';
 
 interface ChatRoomViewProps {
@@ -9,28 +10,43 @@ interface ChatRoomViewProps {
 }
 
 const ChatRoomView: React.FC<ChatRoomViewProps> = ({ chatId, onBack }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', senderId: 'other', text: 'Hey there! How is the project going?', timestamp: '10:30 AM' },
-    { id: '2', senderId: 'me', text: 'It is going great! Almost finished the mobile app UI.', timestamp: '10:32 AM' },
-    { id: '3', senderId: 'other', text: 'Awesome, can’t wait to see it! 😍', timestamp: '10:33 AM' }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        setLoading(true);
+        const data = await messageApi.getMessages(chatId);
+        setMessages(data);
+      } catch (err) {
+        setError('Failed to load messages');
+        console.error('Error fetching messages:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMessages();
+  }, [chatId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      senderId: 'me',
-      text: inputText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setMessages([...messages, newMessage]);
-    setInputText('');
+    try {
+      const newMessage = await messageApi.sendMessage(chatId, inputText);
+      setMessages([...messages, newMessage]);
+      setInputText('');
+    } catch (err) {
+      console.error('Error sending message:', err);
+      // 可以添加错误提示
+    }
   };
 
   return (
@@ -48,24 +64,40 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({ chatId, onBack }) => {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
-        {messages.map((msg) => (
-          <div 
-            key={msg.id} 
-            className={`flex flex-col ${msg.senderId === 'me' ? 'items-end' : 'items-start'}`}
-          >
-            <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-[15px] leading-relaxed break-words ${
-              msg.senderId === 'me' 
-                ? 'bg-sky-500 text-white rounded-br-sm' 
-                : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
-            }`}>
-              {msg.text}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-zinc-500">Loading messages...</div>
+        </div>
+      ) : error ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-zinc-500">{error}</div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-zinc-500">No messages yet. Start the conversation!</div>
             </div>
-            <span className="text-[11px] text-zinc-500 mt-1">{msg.timestamp}</span>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+          ) : (
+            messages.map((msg) => (
+              <div 
+                key={msg.id} 
+                className={`flex flex-col ${msg.senderId === 'me' ? 'items-end' : 'items-start'}`}
+              >
+                <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-[15px] leading-relaxed break-words ${
+                  msg.senderId === 'me' 
+                    ? 'bg-sky-500 text-white rounded-br-sm' 
+                    : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
+                }`}>
+                  {msg.text}
+                </div>
+                <span className="text-[11px] text-zinc-500 mt-1">{msg.timestamp}</span>
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
 
       <div className="p-4 border-t border-zinc-800 pb-[calc(16px+env(safe-area-inset-bottom,0px))] bg-black">
         <div className="flex items-center gap-3">

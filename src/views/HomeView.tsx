@@ -5,36 +5,11 @@ import ImagePreview from '../components/ImagePreview';
 import ReplyModal from '../components/ReplyModal';
 import { Post, User } from '../types';
 import { Loader2 } from 'lucide-react';
+import { postApi } from '../services/api';
 
 interface HomeViewProps {
   currentUser: User;
 }
-
-const generateMockPosts = (startIndex: number, count: number): Post[] => {
-  const categories = ['Tech', 'Nature', 'Architecture', 'People', 'Travel', 'Art'];
-  return Array.from({ length: count }).map((_, i) => {
-    const id = (startIndex + i).toString();
-    const category = categories[Math.floor(Math.random() * categories.length)];
-    return {
-      id,
-      userId: `user-${id}`,
-      author: {
-        id: `user-${id}`,
-        username: `Explorer_${id}`,
-        handle: `@explorer_${id}`,
-        avatar: `https://picsum.photos/seed/user${id}/200`,
-        followers: Math.floor(Math.random() * 5000),
-        following: Math.floor(Math.random() * 1000)
-      },
-      content: `This is dynamically loaded post number ${id}. Exploring the beauty of ${category} today! #InfiniteScroll #SocialH5`,
-      timestamp: `${Math.floor(Math.random() * 24)}h`,
-      likes: Math.floor(Math.random() * 500),
-      reposts: Math.floor(Math.random() * 100),
-      replies: Math.floor(Math.random() * 50),
-      image: Math.random() > 0.3 ? `https://picsum.photos/seed/post${id}/800/600` : undefined
-    };
-  });
-};
 
 const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
   const [tab, setTab] = useState<'FOR_YOU' | 'FOLLOWING'>('FOR_YOU');
@@ -42,17 +17,52 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [replyPost, setReplyPost] = useState<Post | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   
   const observerTarget = useRef<HTMLDivElement>(null);
 
   const loadMorePosts = useCallback(async () => {
-    if (isLoading) return;
+    if (isLoading || !hasMore) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const newPosts = generateMockPosts(posts.length, 5);
-    setPosts(prev => [...prev, ...newPosts]);
-    setIsLoading(false);
-  }, [posts.length, isLoading]);
+    
+    try {
+      const response = await postApi.getPosts(5, offset);
+      const newPosts = response.posts;
+      
+      if (newPosts.length === 0) {
+        setHasMore(false);
+      } else {
+        setPosts(prev => [...prev, ...newPosts]);
+        setOffset(prev => prev + newPosts.length);
+      }
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, offset, hasMore]);
+
+  const refreshPosts = useCallback(async () => {
+    setIsLoading(true);
+    setOffset(0);
+    setHasMore(true);
+    
+    try {
+      const response = await postApi.getPosts(5, 0);
+      setPosts(response.posts);
+      setOffset(response.posts.length);
+      setHasMore(response.posts.length > 0);
+    } catch (error) {
+      console.error('Error refreshing posts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPosts();
+  }, [refreshPosts]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -68,12 +78,6 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
     }
     return () => observer.disconnect();
   }, [loadMorePosts]);
-
-  useEffect(() => {
-    if (posts.length === 0) {
-      loadMorePosts();
-    }
-  }, []);
 
   return (
     <div className="flex flex-col min-h-full">

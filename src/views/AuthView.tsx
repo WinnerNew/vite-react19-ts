@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
+import { authApi } from '../services/api';
 
 interface AuthViewProps {
   onLogin: (user: User) => void;
@@ -10,19 +11,33 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [handle, setHandle] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const mockUser: User = {
-      id: 'me',
-      username: username || 'Guest User',
-      handle: handle || '@guest_user',
-      avatar: 'https://picsum.photos/seed/me/200',
-      bio: 'Building the future of social H5.',
-      followers: 1240,
-      following: 890
-    };
-    onLogin(mockUser);
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      let user: User;
+      const avatar = `https://picsum.photos/seed/${handle}/200`;
+      
+      if (isLogin) {
+        // 登录
+        user = await authApi.login(handle, password);
+      } else {
+        // 注册
+        user = await authApi.register(username, handle, password, avatar);
+      }
+      
+      onLogin(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -60,9 +75,30 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
             placeholder="@johndoe"
           />
         </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-zinc-500 ml-1">Password</label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-transparent border border-zinc-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 rounded-lg p-3.5 text-zinc-100 outline-none transition-all placeholder:text-zinc-700"
+            placeholder="Password"
+          />
+        </div>
 
-        <button type="submit" className="w-full bg-white text-black font-bold py-3.5 rounded-full hover:bg-zinc-200 transition-colors mt-4">
-          {isLogin ? 'Log In' : 'Create account'}
+        {error && (
+          <div className="bg-red-900/30 border border-red-800 rounded-lg p-3 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <button 
+          type="submit" 
+          disabled={isLoading}
+          className="w-full bg-white text-black font-bold py-3.5 rounded-full hover:bg-zinc-200 transition-colors mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Processing...' : (isLogin ? 'Log In' : 'Create account')}
         </button>
       </form>
 

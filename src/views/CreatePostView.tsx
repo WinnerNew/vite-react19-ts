@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { X, Image, List, MapPin, Globe, Smile } from 'lucide-react';
+import { postApi } from '../services/api';
 
 interface CreatePostViewProps {
   onBack: () => void;
@@ -8,19 +9,37 @@ interface CreatePostViewProps {
 
 const CreatePostView: React.FC<CreatePostViewProps> = ({ onBack }) => {
   const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handlePost = async () => {
+    if (!content.trim()) return;
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      await postApi.createPost(content.trim());
+      onBack();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create post');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen bg-black">
       <header className="flex items-center justify-between px-4 py-2 pt-[env(safe-area-inset-top,8px)]">
         <button onClick={onBack} className="p-2 hover:bg-zinc-800 rounded-full transition-colors"><X size={22} /></button>
         <button 
-          disabled={!content.trim()}
-          onClick={onBack}
+          disabled={!content.trim() || isLoading}
+          onClick={handlePost}
           className={`bg-sky-500 text-white font-bold px-5 py-1.5 rounded-full transition-all ${
-            !content.trim() ? 'opacity-50' : 'hover:bg-sky-600 active:scale-95'
+            (!content.trim() || isLoading) ? 'opacity-50' : 'hover:bg-sky-600 active:scale-95'
           }`}
         >
-          Post
+          {isLoading ? 'Posting...' : 'Post'}
         </button>
       </header>
 
