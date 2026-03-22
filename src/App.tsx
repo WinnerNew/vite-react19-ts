@@ -14,7 +14,6 @@ import CreatePostView from "./views/CreatePostView";
 import EditProfileView from "./views/EditProfileView";
 import { userApi } from "./services/api";
 import { User as UserType, ViewState } from "./types";
-
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>("AUTH");
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -153,6 +152,7 @@ const App: React.FC = () => {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="min-h-full"
+              style={{ paddingBottom: "52px" }}
             >
               {renderView()}
             </motion.div>
@@ -164,7 +164,7 @@ const App: React.FC = () => {
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => setCurrentView("CREATE_POST")}
-            className="absolute bottom-20 right-5 z-50 rounded-full bg-sky-500 p-4 text-white shadow-lg shadow-sky-500/30 transition-transform active:bg-sky-600"
+            className="absolute bottom-40 right-5 z-50 rounded-full bg-sky-500 p-4 text-white shadow-lg shadow-sky-500/30 transition-transform active:bg-sky-600"
           >
             <Plus size={24} strokeWidth={3} />
           </motion.button>
@@ -172,7 +172,7 @@ const App: React.FC = () => {
 
         {/* 固定底部导航栏 */}
         {hasNavbar && (
-          <nav className="flex w-full items-center justify-around border-t border-zinc-900 bg-black/90 pb-[env(safe-area-inset-bottom,12px)] backdrop-blur-xl z-50">
+          <nav className="fixed bottom-0 flex w-full items-center justify-around border-t border-zinc-900 bg-black/90 pb-[env(safe-area-inset-bottom,12px)] backdrop-blur-xl z-50">
             <NavItem icon={Home} view="HOME" />
             <NavItem icon={Search} view="EXPLORE" />
             <NavItem icon={Bell} view="NOTIFICATIONS" />
