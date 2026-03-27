@@ -13,6 +13,14 @@ export default defineConfig(({ mode }) => {
       port: Number(env.VITE_PORT) || 3000,
       open: true,
       host: true,
+      proxy: {
+        "/api": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/api/, ""),
+        },
+      },
     },
     plugins: [
       viteCompression({

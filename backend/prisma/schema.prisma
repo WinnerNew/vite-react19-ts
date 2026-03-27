@@ -1,32 +1,30 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  handle    String   @unique
+  id        String    @id @default(cuid())
+  username  String    @unique
+  handle    String    @unique
   avatar    String
   bio       String?
   location  String?
   website   String?
   password  String
-  followers Int      @default(0)
-  following Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  posts    Post[]
-  messages Message[]
-  chats    Chat[]
+  followers Int       @default(0)
+  following Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  chats     Chat[]
+  messages  Message[]
+  posts     Post[]
+
+  @@map("users")
 }
 
 model Post {
@@ -38,29 +36,36 @@ model Post {
   replies   Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "Post_userId_fkey")
+  @@map("posts")
 }
 
 model Message {
   id        String   @id @default(cuid())
   text      String
   createdAt DateTime @default(now())
-  
   senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
   chatId    String
   chat      Chat     @relation(fields: [chatId], references: [id])
+  sender    User     @relation(fields: [senderId], references: [id])
+
+  @@index([chatId], map: "Message_chatId_fkey")
+  @@index([senderId], map: "Message_senderId_fkey")
+  @@map("messages")
 }
 
 model Chat {
-  id          String   @id @default(cuid())
-  unreadCount Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id            String    @id @default(cuid())
+  unreadCount   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   participantId String
   participant   User      @relation(fields: [participantId], references: [id])
   messages      Message[]
+
+  @@index([participantId], map: "Chat_participantId_fkey")
+  @@map("chats")
 }
