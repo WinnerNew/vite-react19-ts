@@ -1,594 +1,423 @@
 const db = require("../db");
 
 const postRoutes = async (fastify, options) => {
-  // 创建帖子
+  // 创建帖子或回复
   fastify.post(
     "/",
     {
       schema: {
-        description: "Create a new post",
+        description: "Create a new post or reply",
         tags: ["post"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
+        security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           required: ["content"],
           properties: {
-            content: {
-              type: "string",
-              description: "Content of the post",
-            },
-            image: {
-              type: "string",
-              nullable: true,
-              description: "Image URL of the post",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              post: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  content: {
-                    type: "string",
-                  },
-                  image: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  likes: {
-                    type: "integer",
-                  },
-                  reposts: {
-                    type: "integer",
-                  },
-                  replies: {
-                    type: "integer",
-                  },
-                  userId: {
-                    type: "string",
-                  },
-                  createdAt: {
-                    type: "string",
-                  },
-                  updatedAt: {
-                    type: "string",
-                  },
-                  user: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                      },
-                      username: {
-                        type: "string",
-                      },
-                      handle: {
-                        type: "string",
-                      },
-                      avatar: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            content: { type: "string" },
+            image: { type: "string", nullable: true },
+            parentId: { type: "string", nullable: true },
           },
         },
       },
     },
     async (request, reply) => {
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
-        const { content, image } = request.body;
+        const { content, image, parentId } = request.body;
 
-        // 创建帖子
         const post = await db.post.create({
           data: {
             content,
             image,
             userId,
+            parentId,
           },
         });
 
-        // 获取用户信息
-        const user = await db.user.findUnique({ where: { id: userId } });
-        const postWithUser = {
-          ...post,
-          user: user
-            ? {
-                id: user.id,
-                username: user.username,
-                handle: user.handle,
-                avatar: user.avatar,
-              }
-            : null,
-        };
+        // 如果是回复，更新父帖子的回复计数并创建通知
+        if (parentId) {
+          const parentPost = await db.post.update({
+            where: { id: parentId },
+            data: { repliesCount: { increment: 1 } },
+          });
 
-        return reply.send({ post: postWithUser });
+          // 创建通知
+          if (parentPost.userId !== userId) {
+            await db.notification.create({
+              data: {
+                type: "REPLY",
+                postId: post.id,
+                actorId: userId,
+                recipientId: parentPost.userId,
+              },
+            });
+          }
+        }
+
+        const user = await db.user.findUnique({ where: { id: userId } });
+        return {
+          ...post,
+          author: {
+            id: user.id,
+            username: user.username,
+            handle: user.handle,
+            avatar: user.avatar,
+          },
+          timestamp: "刚刚",
+          likesCount: 0,
+          repostsCount: 0,
+          repliesCount: 0,
+          isLiked: false,
+          isReposted: false,
+        };
       } catch (error) {
         fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
-        }
         return reply.code(500).send({ msg: "服务器内部错误" });
       }
     },
   );
 
-  // 获取帖子列表
+  // 搜索帖子
   fastify.get(
-    "/",
+    "/search",
     {
       schema: {
-        description: "Get list of posts",
+        description: "Search posts by content",
         tags: ["post"],
         querystring: {
           type: "object",
           properties: {
-            limit: {
-              type: "integer",
-              default: 10,
-              description: "Number of posts to return",
-            },
-            offset: {
-              type: "integer",
-              default: 0,
-              description: "Number of posts to skip",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              posts: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: {
-                      type: "string",
-                    },
-                    content: {
-                      type: "string",
-                    },
-                    image: {
-                      type: "string",
-                      nullable: true,
-                    },
-                    likes: {
-                      type: "integer",
-                    },
-                    reposts: {
-                      type: "integer",
-                    },
-                    replies: {
-                      type: "integer",
-                    },
-                    userId: {
-                      type: "string",
-                    },
-                    createdAt: {
-                      type: "string",
-                    },
-                    updatedAt: {
-                      type: "string",
-                    },
-                    user: {
-                      type: "object",
-                      properties: {
-                        id: {
-                          type: "string",
-                        },
-                        username: {
-                          type: "string",
-                        },
-                        handle: {
-                          type: "string",
-                        },
-                        avatar: {
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-              total: {
-                type: "integer",
-              },
-            },
+            q: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { limit = 10, offset = 0 } = request.query;
+      const { q } = request.query;
+      if (!q) return { posts: [] };
+
+      let userId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        userId = decoded.userId;
+      } catch (e) {}
 
       try {
         const posts = await db.post.findMany({
+          where: {
+            content: { contains: q },
+            parentId: null, // 仅搜索顶层帖子
+          },
           orderBy: { createdAt: "desc" },
-          take: parseInt(limit),
-          skip: parseInt(offset),
+          take: 20,
+          include: {
+            user: true,
+            likes: userId ? { where: { userId } } : false,
+            reposts: userId ? { where: { userId } } : false,
+          },
         });
 
-        // 为每个帖子添加用户信息
-        const postsWithUser = await Promise.all(
-          posts.map(async (post) => {
-            const user = await db.user.findUnique({
-              where: { id: post.userId },
-            });
-            return {
-              ...post,
-              user: user
-                ? {
-                    id: user.id,
-                    username: user.username,
-                    handle: user.handle,
-                    avatar: user.avatar,
-                  }
-                : null,
-            };
-          }),
-        );
-
-        const total = await db.post.count();
-
-        return reply.send({ posts: postsWithUser, total });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
-      }
-    },
-  );
-
-  // 获取单个帖子
-  fastify.get(
-    "/:id",
-    {
-      schema: {
-        description: "Get post by ID",
-        tags: ["post"],
-        params: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Post ID",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              post: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  content: {
-                    type: "string",
-                  },
-                  image: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  likes: {
-                    type: "integer",
-                  },
-                  reposts: {
-                    type: "integer",
-                  },
-                  replies: {
-                    type: "integer",
-                  },
-                  userId: {
-                    type: "string",
-                  },
-                  createdAt: {
-                    type: "string",
-                  },
-                  updatedAt: {
-                    type: "string",
-                  },
-                  user: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                      },
-                      username: {
-                        type: "string",
-                      },
-                      handle: {
-                        type: "string",
-                      },
-                      avatar: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
-
-      try {
-        const post = await db.post.findUnique({
-          where: { id },
-        });
-
-        if (!post) {
-          return reply.code(404).send({ msg: "帖子未找到" });
-        }
-
-        // 获取用户信息
-        const user = await db.user.findUnique({ where: { id: post.userId } });
-        const postWithUser = {
+        const formattedPosts = posts.map((post) => ({
           ...post,
-          user: user
-            ? {
-                id: user.id,
-                username: user.username,
-                handle: user.handle,
-                avatar: user.avatar,
-              }
-            : null,
-        };
+          author: {
+            id: post.user.id,
+            username: post.user.username,
+            handle: post.user.handle,
+            avatar: post.user.avatar,
+          },
+          timestamp: formatTimestamp(post.createdAt),
+          isLiked: userId ? post.likes?.length > 0 : false,
+          isReposted: userId ? post.reposts?.length > 0 : false,
+        }));
 
-        return reply.send({ post: postWithUser });
+        return { posts: formattedPosts };
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return reply.code(500).send({ msg: "搜索失败" });
       }
     },
   );
 
-  // 更新帖子
-  fastify.put(
-    "/:id",
-    {
-      schema: {
-        description: "Update post by ID",
-        tags: ["post"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
-        params: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Post ID",
-            },
-          },
-        },
-        body: {
-          type: "object",
-          properties: {
-            content: {
-              type: "string",
-              description: "Content of the post",
-            },
-            image: {
-              type: "string",
-              nullable: true,
-              description: "Image URL of the post",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              post: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  content: {
-                    type: "string",
-                  },
-                  image: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  likes: {
-                    type: "integer",
-                  },
-                  reposts: {
-                    type: "integer",
-                  },
-                  replies: {
-                    type: "integer",
-                  },
-                  userId: {
-                    type: "string",
-                  },
-                  createdAt: {
-                    type: "string",
-                  },
-                  updatedAt: {
-                    type: "string",
-                  },
-                  user: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                      },
-                      username: {
-                        type: "string",
-                      },
-                      handle: {
-                        type: "string",
-                      },
-                      avatar: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
+  // 获取帖子列表 (带点赞/转发状态)
+  fastify.get("/", async (request, reply) => {
+    const { limit = 20, offset = 0, type = "FOR_YOU" } = request.query;
+    let userId = null;
+    try {
+      const decoded = await request.jwtVerify();
+      userId = decoded.userId;
+    } catch (e) {}
 
-      try {
-        // 验证JWT token
-        const { userId } = await request.jwtVerify();
-        const { content, image } = request.body;
+    try {
+      const where = { parentId: null };
 
-        // 检查帖子是否存在且属于当前用户
-        const existingPost = await db.post.findUnique({
-          where: { id },
+      // 如果是关注列表，筛选关注的人
+      if (type === "FOLLOWING" && userId) {
+        const following = await db.follow.findMany({
+          where: { followerId: userId },
+          select: { followingId: true },
         });
+        const followingIds = following.map((f) => f.followingId);
+        where.userId = { in: [...followingIds, userId] }; // 包含自己
+      }
 
-        if (!existingPost) {
-          return reply.code(404).send({ msg: "帖子未找到" });
+      const posts = await db.post.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: parseInt(limit),
+        skip: parseInt(offset),
+        include: {
+          user: true,
+          likes: userId ? { where: { userId } } : false,
+          reposts: userId ? { where: { userId } } : false,
+          parent: {
+            include: {
+              user: true,
+            },
+          },
+        },
+      });
+
+      const formattedPosts = posts.map((post) => {
+        const formatted = {
+          ...post,
+          author: {
+            id: post.user.id,
+            username: post.user.username,
+            handle: post.user.handle,
+            avatar: post.user.avatar,
+          },
+          timestamp: formatTimestamp(post.createdAt),
+          isLiked: post.likes?.length > 0,
+          isReposted: post.reposts?.length > 0,
+        };
+        if (post.parent) {
+          formatted.parentPost = {
+            ...post.parent,
+            author: {
+              id: post.parent.user.id,
+              username: post.parent.user.username,
+              handle: post.parent.user.handle,
+              avatar: post.parent.user.avatar,
+            },
+          };
         }
+        return formatted;
+      });
 
-        if (existingPost.userId !== userId) {
-          return reply.code(403).send({ msg: "未授权" });
-        }
+      return {
+        posts: formattedPosts,
+        total: await db.post.count({ where }),
+      };
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ msg: "服务器内部错误" });
+    }
+  });
 
-        // 更新帖子
+  // 点赞/取消点赞
+  fastify.post("/:id/like", async (request, reply) => {
+    const { userId } = await request.jwtVerify();
+    const postId = request.params.id;
+
+    try {
+      const existingLike = await db.like.findUnique({
+        where: { userId_postId: { userId, postId } },
+      });
+
+      if (existingLike) {
+        await db.like.delete({ where: { id: existingLike.id } });
+        await db.post.update({
+          where: { id: postId },
+          data: { likesCount: { decrement: 1 } },
+        });
+        return { liked: false };
+      } else {
+        await db.like.create({ data: { userId, postId } });
         const post = await db.post.update({
-          where: { id },
-          data: {
-            content,
-            image,
-          },
+          where: { id: postId },
+          data: { likesCount: { increment: 1 } },
         });
 
-        // 获取用户信息
-        const user = await db.user.findUnique({ where: { id: post.userId } });
-        const postWithUser = {
-          ...post,
-          user: user
-            ? {
-                id: user.id,
-                username: user.username,
-                handle: user.handle,
-                avatar: user.avatar,
-              }
-            : null,
+        // 创建通知
+        if (post.userId !== userId) {
+          await db.notification.create({
+            data: {
+              type: "LIKE",
+              postId: post.id,
+              actorId: userId,
+              recipientId: post.userId,
+            },
+          });
+        }
+        return { liked: true };
+      }
+    } catch (error) {
+      return reply.code(500).send({ msg: "操作失败" });
+    }
+  });
+
+  // 转发/取消转发
+  fastify.post("/:id/repost", async (request, reply) => {
+    const { userId } = await request.jwtVerify();
+    const postId = request.params.id;
+
+    try {
+      const existingRepost = await db.repost.findUnique({
+        where: { userId_postId: { userId, postId } },
+      });
+
+      if (existingRepost) {
+        await db.repost.delete({ where: { id: existingRepost.id } });
+        await db.post.update({
+          where: { id: postId },
+          data: { repostsCount: { decrement: 1 } },
+        });
+        return { reposted: false };
+      } else {
+        await db.repost.create({ data: { userId, postId } });
+        const post = await db.post.update({
+          where: { id: postId },
+          data: { repostsCount: { increment: 1 } },
+        });
+
+        // 创建通知
+        if (post.userId !== userId) {
+          await db.notification.create({
+            data: {
+              type: "REPOST",
+              postId: post.id,
+              actorId: userId,
+              recipientId: post.userId,
+            },
+          });
+        }
+        return { reposted: true };
+      }
+    } catch (error) {
+      return reply.code(500).send({ msg: "操作失败" });
+    }
+  });
+
+  // 获取帖子回复
+  fastify.get("/:id/replies", async (request, reply) => {
+    const postId = request.params.id;
+    let userId = null;
+    try {
+      const decoded = await request.jwtVerify();
+      userId = decoded.userId;
+    } catch (e) {}
+
+    try {
+      const parentPost = await db.post.findUnique({
+        where: { id: postId },
+        include: { user: true },
+      });
+
+      const replies = await db.post.findMany({
+        where: { parentId: postId },
+        orderBy: { createdAt: "asc" },
+        include: {
+          user: true,
+          likes: userId ? { where: { userId } } : false,
+          reposts: userId ? { where: { userId } } : false,
+        },
+      });
+
+      return replies.map((r) => {
+        const formatted = {
+          ...r,
+          author: {
+            id: r.user.id,
+            username: r.user.username,
+            handle: r.user.handle,
+            avatar: r.user.avatar,
+          },
+          timestamp: formatTimestamp(r.createdAt),
+          isLiked: userId ? r.likes?.length > 0 : false,
+          isReposted: userId ? r.reposts?.length > 0 : false,
         };
-
-        return reply.send({ post: postWithUser });
-      } catch (error) {
-        fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
+        if (parentPost) {
+          formatted.parentPost = {
+            ...parentPost,
+            author: {
+              id: parentPost.user.id,
+              username: parentPost.user.username,
+              handle: parentPost.user.handle,
+              avatar: parentPost.user.avatar,
+            },
+          };
         }
-        return reply.code(500).send({ msg: "服务器内部错误" });
-      }
-    },
-  );
+        return formatted;
+      });
+    } catch (error) {
+      return reply.code(500).send({ msg: "获取失败" });
+    }
+  });
 
-  // 删除帖子
-  fastify.delete(
-    "/:id",
-    {
-      schema: {
-        description: "Delete post by ID",
-        tags: ["post"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
-        params: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Post ID",
+  // 获取单个帖子详情
+  fastify.get("/:id", async (request, reply) => {
+    const postId = request.params.id;
+    let userId = null;
+    try {
+      const decoded = await request.jwtVerify();
+      userId = decoded.userId;
+    } catch (e) {}
+
+    try {
+      const post = await db.post.findUnique({
+        where: { id: postId },
+        include: {
+          user: true,
+          likes: userId ? { where: { userId } } : false,
+          reposts: userId ? { where: { userId } } : false,
+          parent: {
+            include: {
+              user: true,
+              likes: userId ? { where: { userId } } : false,
+              reposts: userId ? { where: { userId } } : false,
             },
           },
         },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              message: {
-                type: "string",
-              },
-            },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
+      });
 
-      try {
-        // 验证JWT token
-        const { userId } = await request.jwtVerify();
-
-        // 检查帖子是否存在且属于当前用户
-        const existingPost = await db.post.findUnique({
-          where: { id },
-        });
-
-        if (!existingPost) {
-          return reply.code(404).send({ msg: "帖子未找到" });
-        }
-
-        if (existingPost.userId !== userId) {
-          return reply.code(403).send({ msg: "未授权" });
-        }
-
-        // 删除帖子
-        await db.post.delete({
-          where: { id },
-        });
-
-        return reply.send({ message: "Post deleted successfully" });
-      } catch (error) {
-        fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ error: "Unauthorized" });
-        }
-        return reply.code(500).send({ error: "Internal server error" });
+      if (!post) {
+        return reply.code(404).send({ msg: "帖子未找到" });
       }
-    },
-  );
+
+      const formatSinglePost = (p) => ({
+        ...p,
+        author: {
+          id: p.user.id,
+          username: p.user.username,
+          handle: p.user.handle,
+          avatar: p.user.avatar,
+        },
+        timestamp: formatTimestamp(p.createdAt),
+        fullTimestamp: new Date(p.createdAt).toLocaleString(),
+        isLiked: userId ? p.likes?.length > 0 : false,
+        isReposted: userId ? p.reposts?.length > 0 : false,
+      });
+
+      const response = formatSinglePost(post);
+      if (post.parent) {
+        response.parentPost = formatSinglePost(post.parent);
+      }
+
+      return response;
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.code(500).send({ msg: "服务器内部错误" });
+    }
+  });
 };
+
+function formatTimestamp(date) {
+  const now = new Date();
+  const diff = (now - new Date(date)) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  return new Date(date).toLocaleDateString();
+}
 
 module.exports = postRoutes;

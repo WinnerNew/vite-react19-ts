@@ -6,103 +6,58 @@ const messageRoutes = async (fastify, options) => {
     "/chats",
     {
       schema: {
-        description: "Get list of chats",
+        description: "Get chats for current user",
         tags: ["message"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              chats: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: {
-                      type: "string",
-                    },
-                    participant: {
-                      type: "object",
-                      properties: {
-                        id: {
-                          type: "string",
-                        },
-                        username: {
-                          type: "string",
-                        },
-                        handle: {
-                          type: "string",
-                        },
-                        avatar: {
-                          type: "string",
-                        },
-                      },
-                    },
-                    lastMessage: {
-                      type: "string",
-                    },
-                    unreadCount: {
-                      type: "integer",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+        security: [{ bearerAuth: [] }],
       },
     },
     async (request, reply) => {
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
 
-        // 获取用户的聊天列表
-        const chats = await db.chat.findMany();
+        const chats = await db.chat.findMany({
+          where: {
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
+          orderBy: { updatedAt: "desc" },
+          include: {
+            user1: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+            user2: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+          },
+        });
 
-        // 为每个聊天添加参与者信息和最后一条消息
+        // 格式化聊天列表，确定对方是谁
         const formattedChats = await Promise.all(
           chats.map(async (chat) => {
-            // 获取参与者信息
-            const participant = await db.user.findUnique({
-              where: { id: chat.participantId },
-            });
+            const participant =
+              chat.user1Id === userId ? chat.user2 : chat.user1;
+
             // 获取最后一条消息
             const messages = await db.message.findMany({
               where: { chatId: chat.id },
               orderBy: { createdAt: "desc" },
               take: 1,
             });
-            const lastMessage = messages[0]?.text || "";
+
+            const lastMessage = messages[0]?.text || "No messages yet";
+
             return {
               id: chat.id,
-              participant: participant
-                ? {
-                    id: participant.id,
-                    username: participant.username,
-                    handle: participant.handle,
-                    avatar: participant.avatar,
-                  }
-                : null,
+              participant,
               lastMessage,
               unreadCount: chat.unreadCount,
+              timestamp: formatTimestamp(chat.updatedAt),
             };
           }),
         );
 
-        return reply.send({ chats: formattedChats });
+        return { chats: formattedChats };
       } catch (error) {
         fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
-        }
         return reply.code(500).send({ msg: "服务器内部错误" });
       }
     },
@@ -110,131 +65,52 @@ const messageRoutes = async (fastify, options) => {
 
   // 获取聊天消息
   fastify.get(
-    "/chats/:id/messages",
+    "/chats/:chatId/messages",
     {
       schema: {
-        description: "Get messages for a chat",
+        description: "Get messages for a specific chat",
         tags: ["message"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
+        security: [{ bearerAuth: [] }],
         params: {
           type: "object",
           properties: {
-            id: {
-              type: "string",
-              description: "Chat ID",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              messages: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: {
-                      type: "string",
-                    },
-                    text: {
-                      type: "string",
-                    },
-                    senderId: {
-                      type: "string",
-                    },
-                    chatId: {
-                      type: "string",
-                    },
-                    createdAt: {
-                      type: "string",
-                    },
-                    sender: {
-                      type: "object",
-                      properties: {
-                        id: {
-                          type: "string",
-                        },
-                        username: {
-                          type: "string",
-                        },
-                        handle: {
-                          type: "string",
-                        },
-                        avatar: {
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            chatId: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
+        const { chatId } = request.params;
 
-        // 检查聊天是否存在
+        // 验证用户是否是聊天参与者
         const chat = await db.chat.findUnique({
-          where: { id },
+          where: { id: chatId },
         });
 
-        if (!chat) {
-          return reply.code(404).send({ msg: "聊天未找到" });
+        if (!chat || (chat.user1Id !== userId && chat.user2Id !== userId)) {
+          return reply.code(403).send({ msg: "无权访问此聊天" });
         }
 
-        // 获取聊天消息
         const messages = await db.message.findMany({
-          where: { chatId: id },
+          where: { chatId },
           orderBy: { createdAt: "asc" },
+          include: {
+            sender: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+          },
         });
 
-        // 为每个消息添加发送者信息
-        const messagesWithSender = await Promise.all(
-          messages.map(async (message) => {
-            const sender = await db.user.findUnique({
-              where: { id: message.senderId },
-            });
-            return {
-              ...message,
-              sender: sender
-                ? {
-                    id: sender.id,
-                    username: sender.username,
-                    handle: sender.handle,
-                    avatar: sender.avatar,
-                  }
-                : null,
-            };
-          }),
-        );
-
-        // 重置未读消息计数
-        await db.chat.update({
-          where: { id },
-          data: { unreadCount: 0 },
-        });
-
-        return reply.send({ messages: messagesWithSender });
+        return {
+          messages: messages.map((m) => ({
+            ...m,
+            timestamp: formatTimestamp(m.createdAt),
+          })),
+        };
       } catch (error) {
         fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
-        }
         return reply.code(500).send({ msg: "服务器内部错误" });
       }
     },
@@ -242,274 +118,173 @@ const messageRoutes = async (fastify, options) => {
 
   // 发送消息
   fastify.post(
-    "/chats/:id/messages",
+    "/chats/:chatId/messages",
     {
       schema: {
         description: "Send a message in a chat",
         tags: ["message"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
+        security: [{ bearerAuth: [] }],
         params: {
           type: "object",
           properties: {
-            id: {
-              type: "string",
-              description: "Chat ID",
-            },
+            chatId: { type: "string" },
           },
         },
         body: {
           type: "object",
           required: ["text"],
           properties: {
-            text: {
-              type: "string",
-              description: "Message text",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              message: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  text: {
-                    type: "string",
-                  },
-                  senderId: {
-                    type: "string",
-                  },
-                  chatId: {
-                    type: "string",
-                  },
-                  createdAt: {
-                    type: "string",
-                  },
-                  sender: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                      },
-                      username: {
-                        type: "string",
-                      },
-                      handle: {
-                        type: "string",
-                      },
-                      avatar: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            text: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { id } = request.params;
-
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
+        const { chatId } = request.params;
         const { text } = request.body;
 
-        // 检查聊天是否存在
+        // 验证并更新聊天
         const chat = await db.chat.findUnique({
-          where: { id },
+          where: { id: chatId },
         });
 
-        if (!chat) {
-          return reply.code(404).send({ msg: "聊天未找到" });
+        if (!chat || (chat.user1Id !== userId && chat.user2Id !== userId)) {
+          return reply.code(403).send({ msg: "无权在此聊天中发送消息" });
         }
 
-        // 创建消息
         const message = await db.message.create({
           data: {
             text,
+            chatId,
             senderId: userId,
-            chatId: id,
+          },
+          include: {
+            sender: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
           },
         });
 
-        // 获取发送者信息
-        const sender = await db.user.findUnique({ where: { id: userId } });
-        const messageWithSender = {
-          ...message,
-          sender: sender
-            ? {
-                id: sender.id,
-                username: sender.username,
-                handle: sender.handle,
-                avatar: sender.avatar,
-              }
-            : null,
-        };
-
-        // 更新聊天的未读消息计数
+        // 更新聊天的 updatedAt
         await db.chat.update({
-          where: { id },
-          data: { unreadCount: chat.unreadCount + 1 },
+          where: { id: chatId },
+          data: { updatedAt: new Date() },
         });
 
-        return reply.send({ message: messageWithSender });
+        return {
+          message: {
+            ...message,
+            timestamp: formatTimestamp(message.createdAt),
+          },
+        };
       } catch (error) {
         fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
-        }
         return reply.code(500).send({ msg: "服务器内部错误" });
       }
     },
   );
 
-  // 创建新聊天
+  // 创建或获取已存在的聊天
   fastify.post(
     "/chats",
     {
       schema: {
-        description: "Create a new chat",
+        description: "Create or get a chat with a user",
         tags: ["message"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
+        security: [{ bearerAuth: [] }],
         body: {
           type: "object",
           required: ["participantId"],
           properties: {
-            participantId: {
-              type: "string",
-              description: "ID of the participant",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              chat: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  participantId: {
-                    type: "string",
-                  },
-                  unreadCount: {
-                    type: "integer",
-                  },
-                  createdAt: {
-                    type: "string",
-                  },
-                  updatedAt: {
-                    type: "string",
-                  },
-                  participant: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                      },
-                      username: {
-                        type: "string",
-                      },
-                      handle: {
-                        type: "string",
-                      },
-                      avatar: {
-                        type: "string",
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            participantId: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
         const { participantId } = request.body;
 
-        // 检查参与者是否存在
-        const participant = await db.user.findUnique({
-          where: { id: participantId },
-        });
-
-        if (!participant) {
-          return reply.code(404).send({ msg: "用户未找到" });
+        if (userId === participantId) {
+          return reply.code(400).send({ msg: "不能与自己聊天" });
         }
 
-        // 检查是否已存在聊天
-        const existingChat = await db.chat.findFirst({
-          where: { participantId },
-        });
+        // 确保 ID 顺序一致，以便 findUnique 正常工作
+        const [u1, u2] = [userId, participantId].sort();
 
-        if (existingChat) {
-          // 为现有聊天添加参与者信息
-          const existingChatWithParticipant = {
-            ...existingChat,
-            participant: {
-              id: participant.id,
-              username: participant.username,
-              handle: participant.handle,
-              avatar: participant.avatar,
+        let chat = await db.chat.findUnique({
+          where: {
+            user1Id_user2Id: {
+              user1Id: u1,
+              user2Id: u2,
             },
-          };
-          return reply.send({ chat: existingChatWithParticipant });
-        }
-
-        // 创建新聊天
-        const chat = await db.chat.create({
-          data: {
-            participantId,
+          },
+          include: {
+            user1: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+            user2: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
           },
         });
 
-        // 为新聊天添加参与者信息
-        const chatWithParticipant = {
-          ...chat,
-          participant: {
-            id: participant.id,
-            username: participant.username,
-            handle: participant.handle,
-            avatar: participant.avatar,
+        if (!chat) {
+          chat = await db.chat.create({
+            data: {
+              user1Id: u1,
+              user2Id: u2,
+            },
+            include: {
+              user1: {
+                select: {
+                  id: true,
+                  username: true,
+                  handle: true,
+                  avatar: true,
+                },
+              },
+              user2: {
+                select: {
+                  id: true,
+                  username: true,
+                  handle: true,
+                  avatar: true,
+                },
+              },
+            },
+          });
+        }
+
+        const participant = chat.user1Id === userId ? chat.user2 : chat.user1;
+
+        return {
+          chat: {
+            id: chat.id,
+            participant,
+            lastMessage: "",
+            unreadCount: 0,
+            timestamp: formatTimestamp(chat.updatedAt),
           },
         };
-
-        return reply.send({ chat: chatWithParticipant });
       } catch (error) {
         fastify.log.error(error);
-        if (
-          error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID" ||
-          error.code === "FST_JWT_NO_AUTHORIZATION_IN_HEADER"
-        ) {
-          return reply.code(401).send({ msg: "未授权" });
-        }
         return reply.code(500).send({ msg: "服务器内部错误" });
       }
     },
   );
 };
+
+function formatTimestamp(date) {
+  const now = new Date();
+  const diff = (now - new Date(date)) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return new Date(date).toLocaleDateString();
+}
 
 module.exports = messageRoutes;

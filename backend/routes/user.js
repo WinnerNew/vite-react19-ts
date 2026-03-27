@@ -1,7 +1,98 @@
 const db = require("../db");
 
 const userRoutes = async (fastify, options) => {
-  // 获取用户资料
+  // 搜索用户
+  fastify.get(
+    "/search",
+    {
+      schema: {
+        description: "Search users by username or handle",
+        tags: ["user"],
+        querystring: {
+          type: "object",
+          properties: {
+            q: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { q } = request.query;
+      if (!q) return { users: [] };
+
+      try {
+        const users = await db.user.findMany({
+          where: {
+            OR: [{ username: { contains: q } }, { handle: { contains: q } }],
+          },
+          take: 10,
+          select: {
+            id: true,
+            username: true,
+            handle: true,
+            avatar: true,
+            bio: true,
+          },
+        });
+        return { users };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "搜索失败" });
+      }
+    },
+  );
+
+  // 获取推荐关注用户
+  fastify.get(
+    "/suggestions",
+    {
+      schema: {
+        description: "Get user follow suggestions",
+        tags: ["user"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      let userId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        userId = decoded.userId;
+      } catch (e) {}
+
+      try {
+        // 简单的逻辑：获取最新的用户，排除掉自己和已经关注的人
+        const following = userId
+          ? await db.follow.findMany({
+              where: { followerId: userId },
+              select: { followingId: true },
+            })
+          : [];
+        const followingIds = following.map((f) => f.followingId);
+
+        const users = await db.user.findMany({
+          where: {
+            id: {
+              notIn: userId ? [...followingIds, userId] : [],
+            },
+          },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            username: true,
+            handle: true,
+            avatar: true,
+          },
+        });
+        return { users };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "获取推荐失败" });
+      }
+    },
+  );
+
+  // 获取指定用户信息
   fastify.get(
     "/:id",
     {
@@ -63,23 +154,132 @@ const userRoutes = async (fastify, options) => {
     },
     async (request, reply) => {
       const { id } = request.params;
+      let currentUserId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        currentUserId = decoded.userId;
+      } catch (e) {}
 
       try {
         const user = await db.user.findUnique({
           where: { id },
+          include: {
+            _count: {
+              select: {
+                followersList: true,
+                followingList: true,
+              },
+            },
+            followersList: currentUserId
+              ? {
+                  where: {
+                    followerId: currentUserId,
+                  },
+                }
+              : false,
+          },
         });
 
         if (!user) {
           return reply.code(404).send({ msg: "用户未找到" });
         }
 
-        // 过滤掉密码字段
+        // 过滤掉密码字段并添加关注状态
         const { password: _, ...userWithoutPassword } = user;
+        const formattedUser = {
+          ...userWithoutPassword,
+          followers: user._count.followersList,
+          following: user._count.followingList,
+          isFollowing: currentUserId ? user.followersList?.length > 0 : false,
+        };
 
-        return reply.send({ user: userWithoutPassword });
+        return reply.send({ user: formattedUser });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(500).send({ msg: "服务器内部错误" });
+      }
+    },
+  );
+
+  // 关注/取消关注用户
+  fastify.post(
+    "/:id/follow",
+    {
+      schema: {
+        description: "Follow or unfollow a user",
+        tags: ["user"],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { userId: followerId } = await request.jwtVerify();
+        const { id: followingId } = request.params;
+
+        if (followerId === followingId) {
+          return reply.code(400).send({ msg: "不能关注自己" });
+        }
+
+        const existingFollow = await db.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId,
+              followingId,
+            },
+          },
+        });
+
+        if (existingFollow) {
+          // 取消关注
+          await db.follow.delete({
+            where: { id: existingFollow.id },
+          });
+          // 更新计数
+          await db.user.update({
+            where: { id: followerId },
+            data: { following: { decrement: 1 } },
+          });
+          await db.user.update({
+            where: { id: followingId },
+            data: { followers: { decrement: 1 } },
+          });
+          return { followed: false };
+        } else {
+          // 关注
+          await db.follow.create({
+            data: {
+              followerId,
+              followingId,
+            },
+          });
+          // 创建通知
+          await db.notification.create({
+            data: {
+              type: "FOLLOW",
+              actorId: followerId,
+              recipientId: followingId,
+            },
+          });
+          // 更新计数
+          await db.user.update({
+            where: { id: followerId },
+            data: { following: { increment: 1 } },
+          });
+          await db.user.update({
+            where: { id: followingId },
+            data: { followers: { increment: 1 } },
+          });
+          return { followed: true };
+        }
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "操作失败" });
       }
     },
   );
@@ -279,34 +479,40 @@ const userRoutes = async (fastify, options) => {
     },
     async (request, reply) => {
       const { id } = request.params;
+      let currentUserId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        currentUserId = decoded.userId;
+      } catch (e) {}
 
       try {
         const posts = await db.post.findMany({
-          where: { userId: id },
+          where: { userId: id, parentId: null },
           orderBy: { createdAt: "desc" },
+          include: {
+            user: true,
+            likes: currentUserId ? { where: { userId: currentUserId } } : false,
+            reposts: currentUserId
+              ? { where: { userId: currentUserId } }
+              : false,
+          },
         });
 
-        // 为每个帖子添加用户信息
-        const postsWithUser = await Promise.all(
-          posts.map(async (post) => {
-            const user = await db.user.findUnique({
-              where: { id: post.userId },
-            });
-            return {
-              ...post,
-              user: user
-                ? {
-                    id: user.id,
-                    username: user.username,
-                    handle: user.handle,
-                    avatar: user.avatar,
-                  }
-                : null,
-            };
-          }),
-        );
+        // 格式化帖子
+        const formattedPosts = posts.map((post) => ({
+          ...post,
+          author: {
+            id: post.user.id,
+            username: post.user.username,
+            handle: post.user.handle,
+            avatar: post.user.avatar,
+          },
+          timestamp: formatTimestamp(post.createdAt),
+          isLiked: currentUserId ? post.likes?.length > 0 : false,
+          isReposted: currentUserId ? post.reposts?.length > 0 : false,
+        }));
 
-        return reply.send({ posts: postsWithUser });
+        return reply.send({ posts: formattedPosts });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(500).send({ msg: "服务器内部错误" });
@@ -314,5 +520,14 @@ const userRoutes = async (fastify, options) => {
     },
   );
 };
+
+function formatTimestamp(date) {
+  const now = new Date();
+  const diff = (now - new Date(date)) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  return new Date(date).toLocaleDateString();
+}
 
 module.exports = userRoutes;

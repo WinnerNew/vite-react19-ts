@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import "./style/bass.css";
 import "./style/index.css";
 
+import { BrowserRouter } from "react-router-dom";
+
 import App from "./App.tsx";
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -11,6 +13,8 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
-  </React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
 );

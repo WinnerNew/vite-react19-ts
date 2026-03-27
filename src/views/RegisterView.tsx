@@ -1,13 +1,9 @@
 import React, { useState } from "react";
-import { User } from "../types";
+import { useNavigate, Link } from "react-router-dom";
 import { authApi } from "../services/api";
 
-interface AuthViewProps {
-  onLogin: (user: User) => void;
-}
-
-const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
-  const [isLogin, setIsLogin] = useState(true);
+const RegisterView: React.FC = () => {
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [handle, setHandle] = useState("");
   const [password, setPassword] = useState("");
@@ -20,18 +16,10 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
     setError("");
 
     try {
-      let user: User;
       const avatar = `https://picsum.photos/seed/${handle}/200`;
-
-      if (isLogin) {
-        // 登录
-        user = await authApi.login(handle, password);
-      } else {
-        // 注册
-        user = await authApi.register(username, handle, password, avatar);
-      }
-
-      onLogin(user);
+      await authApi.register(username, handle, password, avatar);
+      // 注册成功，跳转登录页并带上 handle
+      navigate("/login", { state: { handle } });
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -50,7 +38,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
       </div>
 
       <h1 className="text-3xl font-black mb-10 tracking-tight text-center">
-        {isLogin ? "What's happening now" : "Join the conversation"}
+        Join the conversation
       </h1>
 
       <form onSubmit={handleSubmit} className="w-full space-y-4">
@@ -105,19 +93,19 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
           disabled={isLoading}
           className="w-full bg-white text-black font-bold py-3.5 rounded-full hover:bg-zinc-200 transition-colors mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? "Processing..." : isLogin ? "Log In" : "Create account"}
+          {isLoading ? "Processing..." : "Create account"}
         </button>
       </form>
 
       <div className="mt-10 text-center">
         <p className="text-zinc-500 pb-10">
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
+          Already have an account?{" "}
+          <Link
+            to="/login"
             className="text-sky-500 font-medium hover:underline"
           >
-            {isLogin ? "Sign up" : "Log in"}
-          </button>
+            Log in
+          </Link>
         </p>
       </div>
 
@@ -131,4 +119,4 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   );
 };
 
-export default AuthView;
+export default RegisterView;

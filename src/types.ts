@@ -8,6 +8,7 @@ export interface User {
   following: number;
   location?: string;
   website?: string;
+  isFollowing?: boolean;
 }
 
 export interface Post {
@@ -16,24 +17,41 @@ export interface Post {
   author: User;
   content: string;
   timestamp: string;
-  likes: number;
-  reposts: number;
-  replies: number;
+  fullTimestamp?: string;
+  likesCount: number;
+  repostsCount: number;
+  repliesCount: number;
   image?: string;
+  isLiked?: boolean;
+  isReposted?: boolean;
+  parentId?: string;
+  parentPost?: Post;
 }
 
 export interface Message {
   id: string;
-  senderId: string;
   text: string;
   timestamp: string;
+  sender: User;
 }
 
 export interface Chat {
   id: string;
   participant: User;
-  lastMessage?: string;
+  lastMessage: string;
   unreadCount: number;
+  timestamp: string;
+}
+
+export interface Notification {
+  id: string;
+  type: "LIKE" | "REPOST" | "REPLY" | "FOLLOW";
+  postId?: string;
+  actorId: string;
+  recipientId: string;
+  isRead: boolean;
+  time: string;
+  actor: User;
 }
 
 export type ViewState =

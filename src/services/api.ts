@@ -1,4 +1,4 @@
-import { User, Post, Message, Chat } from "../types";
+import { User, Post, Message, Chat, Notification } from "../types";
 
 const API_BASE_URL = "http://localhost:3001/api";
 
@@ -22,10 +22,13 @@ async function request<T>(
 ): Promise<T> {
   const token = getToken();
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
   };
+
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -99,6 +102,38 @@ export const userApi = {
     return response.user;
   },
 
+  // 获取用户资料
+  getProfile: async (id: string) => {
+    const response = await request<{ user: User }>(`/user/${id}`);
+    return response.user;
+  },
+
+  // 搜索用户
+  searchUsers: async (q: string) => {
+    const response = await request<{ users: User[] }>(
+      `/user/search?q=${encodeURIComponent(q)}`,
+    );
+    return response.users;
+  },
+
+  // 获取推荐关注
+  getSuggestions: async () => {
+    const response = await request<{ users: User[] }>("/user/suggestions");
+    return response.users;
+  },
+
+  // 关注/取消关注
+  followUser: async (id: string) => {
+    const response = await request<{ followed: boolean }>(
+      `/user/${id}/follow`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    return response;
+  },
+
   // 更新用户资料
   updateProfile: async (
     bio: string,
@@ -122,44 +157,66 @@ export const userApi = {
 
 // 帖子相关API
 export const postApi = {
-  // 创建帖子
-  createPost: async (content: string, image?: string) => {
-    const response = await request<{ post: Post }>("/post", {
+  // 创建帖子或回复
+  createPost: async (content: string, image?: string, parentId?: string) => {
+    const response = await request<Post>("/post", {
       method: "POST",
-      body: JSON.stringify({ content, image }),
+      body: JSON.stringify({ content, image, parentId }),
     });
-    return response.post;
+    return response;
   },
 
   // 获取帖子列表
-  getPosts: async (limit: number = 10, offset: number = 0) => {
+  getPosts: async (
+    limit: number = 10,
+    offset: number = 0,
+    type: string = "FOR_YOU",
+  ) => {
     const response = await request<{ posts: Post[]; total: number }>(
-      `/post?limit=${limit}&offset=${offset}`,
+      `/post?limit=${limit}&offset=${offset}&type=${type}`,
+    );
+    return response;
+  },
+
+  // 搜索帖子
+  searchPosts: async (q: string) => {
+    const response = await request<{ posts: Post[] }>(
+      `/post/search?q=${encodeURIComponent(q)}`,
+    );
+    return response.posts;
+  },
+
+  // 点赞/取消点赞
+  likePost: async (id: string) => {
+    const response = await request<{ liked: boolean }>(`/post/${id}/like`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    return response;
+  },
+
+  // 转发/取消转发
+  repostPost: async (id: string) => {
+    const response = await request<{ reposted: boolean }>(
+      `/post/${id}/repost`,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
     );
     return response;
   },
 
   // 获取单个帖子
   getPost: async (id: string) => {
-    const response = await request<{ post: Post }>(`/post/${id}`);
-    return response.post;
+    const response = await request<Post>(`/post/${id}`);
+    return response;
   },
 
-  // 更新帖子
-  updatePost: async (id: string, content: string, image?: string) => {
-    const response = await request<{ post: Post }>(`/post/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({ content, image }),
-    });
-    return response.post;
-  },
-
-  // 删除帖子
-  deletePost: async (id: string) => {
-    const response = await request<{ message: string }>(`/post/${id}`, {
-      method: "DELETE",
-    });
-    return response.message;
+  // 获取回复列表
+  getReplies: async (id: string) => {
+    const response = await request<Post[]>(`/post/${id}/replies`);
+    return response;
   },
 };
 
@@ -198,5 +255,26 @@ export const messageApi = {
       body: JSON.stringify({ participantId }),
     });
     return response.chat;
+  },
+};
+
+// 通知相关API
+export const notificationApi = {
+  // 获取通知列表
+  getNotifications: async () => {
+    const response = await request<Notification[]>("/notification");
+    return response;
+  },
+
+  // 标记所有通知为已读
+  markAllAsRead: async () => {
+    const response = await request<{ success: boolean }>(
+      "/notification/read-all",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
+    return response;
   },
 };
