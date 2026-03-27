@@ -97,6 +97,26 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     }
   };
 
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "Joined October 2023";
+    const date = new Date(dateString);
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    return `Joined ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-black">
@@ -227,18 +247,24 @@ const ProfileView: React.FC<ProfileViewProps> = ({
             )}
             <div className="flex items-center gap-1">
               <Calendar size={14} />
-              <span>Joined October 2023</span>
+              <span>{formatDate(profileUser.createdAt)}</span>
             </div>
           </div>
 
           <div className="flex gap-4 pt-1">
-            <button className="hover:underline flex gap-1 items-center text-sm">
+            <button
+              onClick={() => navigate(`/profile/${profileUser.id}/following`)}
+              className="hover:underline flex gap-1 items-center text-sm"
+            >
               <span className="font-bold text-white">
                 {profileUser.following}
               </span>
               <span className="text-zinc-500">Following</span>
             </button>
-            <button className="hover:underline flex gap-1 items-center text-sm">
+            <button
+              onClick={() => navigate(`/profile/${profileUser.id}/followers`)}
+              className="hover:underline flex gap-1 items-center text-sm"
+            >
               <span className="font-bold text-white">
                 {profileUser.followers}
               </span>

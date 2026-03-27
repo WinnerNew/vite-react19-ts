@@ -9,6 +9,7 @@ export interface User {
   location?: string;
   website?: string;
   isFollowing?: boolean;
+  createdAt?: string;
 }
 
 export interface Post {

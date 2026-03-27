@@ -71,7 +71,7 @@ const ReplyModal: React.FC<ReplyModalProps> = ({
               <div className="flex flex-col items-center">
                 <img
                   src={post.author.avatar}
-                  className="w-10 h-10 rounded-full"
+                  className="w-10 h-10 rounded-full object-cover"
                 />
                 <div className="w-0.5 flex-1 bg-gray-800 my-1" />
               </div>
@@ -96,7 +96,7 @@ const ReplyModal: React.FC<ReplyModalProps> = ({
             <div className="flex gap-3">
               <img
                 src={currentUser.avatar}
-                className="w-10 h-10 rounded-full"
+                className="w-10 h-10 rounded-full object-cover"
               />
               <textarea
                 autoFocus

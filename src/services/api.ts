@@ -136,6 +136,7 @@ export const userApi = {
 
   // 更新用户资料
   updateProfile: async (
+    username: string,
     bio: string,
     location: string,
     website: string,
@@ -143,7 +144,7 @@ export const userApi = {
   ) => {
     const response = await request<{ user: User }>("/user/profile", {
       method: "PUT",
-      body: JSON.stringify({ bio, location, website, avatar }),
+      body: JSON.stringify({ username, bio, location, website, avatar }),
     });
     return response.user;
   },
@@ -152,6 +153,18 @@ export const userApi = {
   getUserPosts: async (id: string) => {
     const response = await request<{ posts: Post[] }>(`/user/${id}/posts`);
     return response.posts;
+  },
+
+  // 获取粉丝列表
+  getFollowers: async (id: string) => {
+    const response = await request<{ users: User[] }>(`/user/${id}/followers`);
+    return response.users;
+  },
+
+  // 获取关注列表
+  getFollowing: async (id: string) => {
+    const response = await request<{ users: User[] }>(`/user/${id}/following`);
+    return response.users;
   },
 };
 

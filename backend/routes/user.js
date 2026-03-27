@@ -145,6 +145,13 @@ const userRoutes = async (fastify, options) => {
                   following: {
                     type: "integer",
                   },
+                  isFollowing: {
+                    type: "boolean",
+                  },
+                  createdAt: {
+                    type: "string",
+                    format: "date-time",
+                  },
                 },
               },
             },
@@ -191,12 +198,131 @@ const userRoutes = async (fastify, options) => {
           followers: user._count.followersList,
           following: user._count.followingList,
           isFollowing: currentUserId ? user.followersList?.length > 0 : false,
+          createdAt: user.createdAt.toISOString(),
         };
 
         return reply.send({ user: formattedUser });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(500).send({ msg: "服务器内部错误" });
+      }
+    },
+  );
+
+  // 获取粉丝列表
+  fastify.get(
+    "/:id/followers",
+    {
+      schema: {
+        description: "Get user followers",
+        tags: ["user"],
+        params: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      let currentUserId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        currentUserId = decoded.userId;
+      } catch (e) {}
+
+      try {
+        const follows = await db.follow.findMany({
+          where: { followingId: id },
+          include: {
+            follower: {
+              select: {
+                id: true,
+                username: true,
+                handle: true,
+                avatar: true,
+                bio: true,
+                followersList: currentUserId
+                  ? {
+                      where: { followerId: currentUserId },
+                    }
+                  : false,
+              },
+            },
+          },
+        });
+
+        const users = follows.map((f) => ({
+          ...f.follower,
+          isFollowing: currentUserId
+            ? f.follower.followersList?.length > 0
+            : false,
+        }));
+
+        return { users };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "获取粉丝列表失败" });
+      }
+    },
+  );
+
+  // 获取关注列表
+  fastify.get(
+    "/:id/following",
+    {
+      schema: {
+        description: "Get user following",
+        tags: ["user"],
+        params: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      let currentUserId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        currentUserId = decoded.userId;
+      } catch (e) {}
+
+      try {
+        const follows = await db.follow.findMany({
+          where: { followerId: id },
+          include: {
+            following: {
+              select: {
+                id: true,
+                username: true,
+                handle: true,
+                avatar: true,
+                bio: true,
+                followersList: currentUserId
+                  ? {
+                      where: { followerId: currentUserId },
+                    }
+                  : false,
+              },
+            },
+          },
+        });
+
+        const users = follows.map((f) => ({
+          ...f.following,
+          isFollowing: currentUserId
+            ? f.following.followersList?.length > 0
+            : false,
+        }));
+
+        return { users };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "获取关注列表失败" });
       }
     },
   );
@@ -299,6 +425,11 @@ const userRoutes = async (fastify, options) => {
         body: {
           type: "object",
           properties: {
+            username: {
+              type: "string",
+              nullable: true,
+              description: "Username of the user",
+            },
             bio: {
               type: "string",
               nullable: true,
@@ -358,6 +489,10 @@ const userRoutes = async (fastify, options) => {
                   following: {
                     type: "integer",
                   },
+                  createdAt: {
+                    type: "string",
+                    format: "date-time",
+                  },
                 },
               },
             },
@@ -369,12 +504,13 @@ const userRoutes = async (fastify, options) => {
       try {
         // 验证JWT token
         const { userId } = await request.jwtVerify();
-        const { bio, location, website, avatar } = request.body;
+        const { username, bio, location, website, avatar } = request.body;
 
         // 更新用户资料
         const user = await db.user.update({
           where: { id: userId },
           data: {
+            username,
             bio,
             location,
             website,
@@ -385,7 +521,12 @@ const userRoutes = async (fastify, options) => {
         // 过滤掉密码字段
         const { password: _, ...userWithoutPassword } = user;
 
-        return reply.send({ user: userWithoutPassword });
+        return reply.send({
+          user: {
+            ...userWithoutPassword,
+            createdAt: user.createdAt.toISOString(),
+          },
+        });
       } catch (error) {
         fastify.log.error(error);
         if (
@@ -434,13 +575,13 @@ const userRoutes = async (fastify, options) => {
                       type: "string",
                       nullable: true,
                     },
-                    likes: {
+                    likesCount: {
                       type: "integer",
                     },
-                    reposts: {
+                    repostsCount: {
                       type: "integer",
                     },
-                    replies: {
+                    repliesCount: {
                       type: "integer",
                     },
                     userId: {
@@ -452,7 +593,16 @@ const userRoutes = async (fastify, options) => {
                     updatedAt: {
                       type: "string",
                     },
-                    user: {
+                    timestamp: {
+                      type: "string",
+                    },
+                    isLiked: {
+                      type: "boolean",
+                    },
+                    isReposted: {
+                      type: "boolean",
+                    },
+                    author: {
                       type: "object",
                       properties: {
                         id: {

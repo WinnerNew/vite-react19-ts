@@ -10,16 +10,13 @@ interface MessageViewProps {
 const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchChats = async () => {
       try {
-        setLoading(true);
         const data = await messageApi.getChats();
         setChats(data);
       } catch (err) {
-        setError("Failed to load chats");
         console.error("Error fetching chats:", err);
       } finally {
         setLoading(false);
@@ -27,6 +24,8 @@ const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
     };
 
     fetchChats();
+    const interval = setInterval(fetchChats, 5000); // 5秒轮询一次列表
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -57,39 +56,6 @@ const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
         </header>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-zinc-500">Loading chats...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col h-full bg-black">
-        <header className="sticky top-0 bg-black/80 backdrop-blur-md z-40 border-b border-zinc-800">
-          <div className="flex items-center justify-between px-4 py-2 pt-[calc(env(safe-area-inset-top,0px)+1rem)]">
-            <h2 className="text-xl font-extrabold tracking-tight">Messages</h2>
-            <div className="flex gap-2">
-              <button className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
-                <Settings size={20} />
-              </button>
-              <button className="p-2 hover:bg-zinc-800 rounded-full transition-colors">
-                <MailPlus size={20} />
-              </button>
-            </div>
-          </div>
-          <div className="px-4 py-2">
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2 group focus-within:ring-1 focus-within:ring-sky-500 transition-all">
-              <Search size={16} className="text-zinc-500" />
-              <input
-                type="text"
-                placeholder="Search Direct Messages"
-                className="bg-transparent border-none text-[14px] ml-3 outline-none w-full placeholder:text-zinc-600"
-              />
-            </div>
-          </div>
-        </header>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-zinc-500">{error}</div>
         </div>
       </div>
     );
@@ -158,7 +124,7 @@ const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
                     </span>
                   </div>
                   <span className="text-zinc-500 text-[13px] flex-shrink-0 ml-2">
-                    Oct 24
+                    {chat.timestamp}
                   </span>
                 </div>
                 <p

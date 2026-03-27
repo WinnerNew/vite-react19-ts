@@ -72,7 +72,10 @@ const postRoutes = async (fastify, options) => {
         };
       } catch (error) {
         fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return reply.code(500).send({
+          msg: "服务器内部错误",
+          error: error.message,
+        });
       }
     },
   );
@@ -139,80 +142,97 @@ const postRoutes = async (fastify, options) => {
   );
 
   // 获取帖子列表 (带点赞/转发状态)
-  fastify.get("/", async (request, reply) => {
-    const { limit = 20, offset = 0, type = "FOR_YOU" } = request.query;
-    let userId = null;
-    try {
-      const decoded = await request.jwtVerify();
-      userId = decoded.userId;
-    } catch (e) {}
-
-    try {
-      const where = { parentId: null };
-
-      // 如果是关注列表，筛选关注的人
-      if (type === "FOLLOWING" && userId) {
-        const following = await db.follow.findMany({
-          where: { followerId: userId },
-          select: { followingId: true },
-        });
-        const followingIds = following.map((f) => f.followingId);
-        where.userId = { in: [...followingIds, userId] }; // 包含自己
-      }
-
-      const posts = await db.post.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: parseInt(limit),
-        skip: parseInt(offset),
-        include: {
-          user: true,
-          likes: userId ? { where: { userId } } : false,
-          reposts: userId ? { where: { userId } } : false,
-          parent: {
-            include: {
-              user: true,
-            },
+  fastify.get(
+    "/",
+    {
+      schema: {
+        description: "Get posts list with like/repost status",
+        tags: ["post"],
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", default: 20 },
+            offset: { type: "integer", default: 0 },
+            type: { type: "string", default: "FOR_YOU" },
           },
         },
-      });
+      },
+    },
+    async (request, reply) => {
+      const { limit, offset, type } = request.query;
+      let userId = null;
+      try {
+        const decoded = await request.jwtVerify();
+        userId = decoded.userId;
+      } catch (e) {}
 
-      const formattedPosts = posts.map((post) => {
-        const formatted = {
-          ...post,
-          author: {
-            id: post.user.id,
-            username: post.user.username,
-            handle: post.user.handle,
-            avatar: post.user.avatar,
-          },
-          timestamp: formatTimestamp(post.createdAt),
-          isLiked: post.likes?.length > 0,
-          isReposted: post.reposts?.length > 0,
-        };
-        if (post.parent) {
-          formatted.parentPost = {
-            ...post.parent,
-            author: {
-              id: post.parent.user.id,
-              username: post.parent.user.username,
-              handle: post.parent.user.handle,
-              avatar: post.parent.user.avatar,
-            },
-          };
+      try {
+        const where = { parentId: null };
+
+        // 如果是关注列表，筛选关注的人
+        if (type === "FOLLOWING" && userId) {
+          const following = await db.follow.findMany({
+            where: { followerId: userId },
+            select: { followingId: true },
+          });
+          const followingIds = following.map((f) => f.followingId);
+          where.userId = { in: [...followingIds, userId] }; // 包含自己
         }
-        return formatted;
-      });
 
-      return {
-        posts: formattedPosts,
-        total: await db.post.count({ where }),
-      };
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ msg: "服务器内部错误" });
-    }
-  });
+        const posts = await db.post.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset,
+          include: {
+            user: true,
+            likes: userId ? { where: { userId } } : false,
+            reposts: userId ? { where: { userId } } : false,
+            parent: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        });
+
+        const formattedPosts = posts.map((post) => {
+          const formatted = {
+            ...post,
+            author: {
+              id: post.user.id,
+              username: post.user.username,
+              handle: post.user.handle,
+              avatar: post.user.avatar,
+            },
+            timestamp: formatTimestamp(post.createdAt),
+            isLiked: userId ? post.likes?.length > 0 : false,
+            isReposted: userId ? post.reposts?.length > 0 : false,
+          };
+          if (post.parent) {
+            formatted.parentPost = {
+              ...post.parent,
+              author: {
+                id: post.parent.user.id,
+                username: post.parent.user.username,
+                handle: post.parent.user.handle,
+                avatar: post.parent.user.avatar,
+              },
+            };
+          }
+          return formatted;
+        });
+
+        return {
+          posts: formattedPosts,
+          total: await db.post.count({ where }),
+        };
+      } catch (error) {
+        fastify.log.error(error);
+        return reply.code(500).send({ msg: "服务器内部错误" });
+      }
+    },
+  );
 
   // 点赞/取消点赞
   fastify.post("/:id/like", async (request, reply) => {

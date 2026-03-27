@@ -15,6 +15,7 @@ import ProfileView from "./views/ProfileView";
 import ChatRoomView from "./views/ChatRoomView";
 import LoginView from "./views/LoginView";
 import RegisterView from "./views/RegisterView";
+import FollowListView from "./views/FollowListView";
 import PostDetailView from "./views/PostDetailView";
 import NotificationsView from "./views/NotificationsView";
 import SettingsView from "./views/SettingsView";
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const handleUpdateUser = async (updatedUser: UserType) => {
     try {
       const response = await userApi.updateProfile(
+        updatedUser.username,
         updatedUser.bio || "",
         updatedUser.location || "",
         updatedUser.website || "",
@@ -92,30 +94,45 @@ const App: React.FC = () => {
       "/system-settings",
     ].includes(location.pathname);
 
+  const isTabActive = (path: string) => {
+    if (path === "/") {
+      return (
+        location.pathname === "/" || location.pathname.startsWith("/post/")
+      );
+    }
+    if (path === "/profile") {
+      return (
+        location.pathname === "/profile" ||
+        (location.pathname.startsWith("/profile/") &&
+          location.pathname.split("/")[2] === currentUser?.id)
+      );
+    }
+    return location.pathname.startsWith(path);
+  };
+
   const NavItem = ({
     icon: Icon,
     path,
   }: {
     icon: React.ElementType;
     path: string;
-  }) => (
-    <button
-      onClick={() => navigate(path)}
-      className={`flex flex-1 flex-col items-center justify-center py-3 transition-all active:scale-90 ${
-        location.pathname === path
-          ? "text-zinc-100"
-          : "text-zinc-500 hover:text-zinc-300"
-      }`}
-    >
-      <Icon
-        className={`h-7 w-7 transition-transform ${
-          location.pathname === path
-            ? "scale-110 stroke-[2.5px]"
-            : "stroke-[1.5px]"
+  }) => {
+    const active = isTabActive(path);
+    return (
+      <button
+        onClick={() => navigate(path)}
+        className={`flex flex-1 flex-col items-center justify-center py-3 transition-all active:scale-90 ${
+          active ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
         }`}
-      />
-    </button>
-  );
+      >
+        <Icon
+          className={`h-7 w-7 transition-transform ${
+            active ? "scale-110 stroke-[2.5px]" : "stroke-[1.5px]"
+          }`}
+        />
+      </button>
+    );
+  };
 
   return (
     <div className="flex h-screen w-full justify-center bg-zinc-950 overflow-hidden">
@@ -248,6 +265,26 @@ const App: React.FC = () => {
                   }
                 />
                 <Route
+                  path="/profile/:id/followers"
+                  element={
+                    currentUser ? (
+                      <FollowListView currentUser={currentUser} />
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                />
+                <Route
+                  path="/profile/:id/following"
+                  element={
+                    currentUser ? (
+                      <FollowListView currentUser={currentUser} />
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                />
+                <Route
                   path="/edit-profile"
                   element={
                     currentUser ? (
@@ -336,7 +373,7 @@ const App: React.FC = () => {
             >
               <div
                 className={`h-7 w-7 overflow-hidden rounded-full border-2 transition-all ${
-                  location.pathname === "/profile"
+                  isTabActive("/profile")
                     ? "scale-110 border-sky-500"
                     : "border-transparent opacity-70"
                 }`}

@@ -11,8 +11,8 @@ model User {
   id        String    @id @default(cuid())
   username  String    @unique
   handle    String    @unique
-  avatar    String
-  bio       String?
+  avatar    String    @db.LongText
+  bio       String?   @db.Text
   location  String?
   website   String?
   password  String
@@ -28,8 +28,8 @@ model User {
   reposts    Repost[]
   
   // 关注逻辑
-  followersList Follow[] @relation("following")
-  followingList Follow[] @relation("follower")
+  followersList Follow[] @relation("follower")
+  followingList Follow[] @relation("following")
 
   // 通知关联
   notifications         Notification[] @relation("recipient")
@@ -57,8 +57,8 @@ model Notification {
 
 model Post {
   id        String   @id @default(cuid())
-  content   String
-  image     String?
+  content   String   @db.Text
+  image     String?  @db.LongText
   likesCount Int      @default(0)
   repostsCount Int      @default(0)
   repliesCount Int      @default(0)

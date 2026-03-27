@@ -17,17 +17,17 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        setLoading(true);
         const data = await messageApi.getMessages(chat.id);
-        setMessages(data);
+        // 只有当消息数量变化时才更新，避免频繁重绘
+        if (data.length !== messages.length) {
+          setMessages(data);
+        }
       } catch (err) {
-        setError("Failed to load messages");
         console.error("Error fetching messages:", err);
       } finally {
         setLoading(false);
@@ -35,7 +35,9 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     };
 
     fetchMessages();
-  }, [chat.id]);
+    const interval = setInterval(fetchMessages, 3000); // 3秒轮询一次
+    return () => clearInterval(interval);
+  }, [chat.id, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -82,17 +84,13 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
         </div>
-      ) : error ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-zinc-500">{error}</div>
-        </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center py-20 text-center">
               <img
                 src={chat.participant.avatar}
-                className="w-16 h-16 rounded-full mx-auto mb-4 border border-zinc-800"
+                className="w-16 h-16 rounded-full mx-auto mb-4 border border-zinc-800 object-cover"
               />
               <h3 className="text-xl font-bold">{chat.participant.username}</h3>
               <p className="text-zinc-500 text-sm">{chat.participant.handle}</p>

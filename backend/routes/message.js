@@ -27,33 +27,28 @@ const messageRoutes = async (fastify, options) => {
             user2: {
               select: { id: true, username: true, handle: true, avatar: true },
             },
+            messages: {
+              take: 1,
+              orderBy: { createdAt: "desc" },
+              select: { text: true },
+            },
           },
         });
 
         // 格式化聊天列表，确定对方是谁
-        const formattedChats = await Promise.all(
-          chats.map(async (chat) => {
-            const participant =
-              chat.user1Id === userId ? chat.user2 : chat.user1;
+        const formattedChats = chats.map((chat) => {
+          const participant = chat.user1Id === userId ? chat.user2 : chat.user1;
 
-            // 获取最后一条消息
-            const messages = await db.message.findMany({
-              where: { chatId: chat.id },
-              orderBy: { createdAt: "desc" },
-              take: 1,
-            });
+          const lastMessage = chat.messages[0]?.text || "No messages yet";
 
-            const lastMessage = messages[0]?.text || "No messages yet";
-
-            return {
-              id: chat.id,
-              participant,
-              lastMessage,
-              unreadCount: chat.unreadCount,
-              timestamp: formatTimestamp(chat.updatedAt),
-            };
-          }),
-        );
+          return {
+            id: chat.id,
+            participant,
+            lastMessage,
+            unreadCount: chat.unreadCount,
+            timestamp: formatTimestamp(chat.updatedAt),
+          };
+        });
 
         return { chats: formattedChats };
       } catch (error) {
@@ -77,12 +72,20 @@ const messageRoutes = async (fastify, options) => {
             chatId: { type: "string" },
           },
         },
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", default: 50 },
+            offset: { type: "integer", default: 0 },
+          },
+        },
       },
     },
     async (request, reply) => {
       try {
         const { userId } = await request.jwtVerify();
         const { chatId } = request.params;
+        const { limit, offset } = request.query;
 
         // 验证用户是否是聊天参与者
         const chat = await db.chat.findUnique({
@@ -93,20 +96,41 @@ const messageRoutes = async (fastify, options) => {
           return reply.code(403).send({ msg: "无权访问此聊天" });
         }
 
+        // 重置未读计数
+        if (chat.unreadCount > 0) {
+          await db.chat.update({
+            where: { id: chatId },
+            data: { unreadCount: 0 },
+          });
+        }
+
         const messages = await db.message.findMany({
           where: { chatId },
-          orderBy: { createdAt: "asc" },
-          include: {
-            sender: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
+          orderBy: { createdAt: "desc" }, // 最新的排在前面，方便分页
+          take: limit,
+          skip: offset,
+          select: {
+            id: true,
+            text: true,
+            createdAt: true,
+            senderId: true,
           },
         });
 
+        // 由于是 desc 排序取出来的，如果是要渲染到页面，前端需要 reverse 或者后端 reverse
+        // 这里为了兼容性，我们先手动排序成升序，或者由前端处理。
+        // 为了最小化前端改动，我们在返回前先转成 asc。
+        const sortedMessages = messages.sort(
+          (a, b) => a.createdAt - b.createdAt,
+        );
+
         return {
-          messages: messages.map((m) => ({
-            ...m,
+          messages: sortedMessages.map((m) => ({
+            id: m.id,
+            text: m.text,
+            createdAt: m.createdAt,
             timestamp: formatTimestamp(m.createdAt),
+            sender: { id: m.senderId }, // 最小化发送者信息
           })),
         };
       } catch (error) {
@@ -160,23 +184,30 @@ const messageRoutes = async (fastify, options) => {
             chatId,
             senderId: userId,
           },
-          include: {
-            sender: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
+          select: {
+            id: true,
+            text: true,
+            createdAt: true,
+            senderId: true,
           },
         });
 
-        // 更新聊天的 updatedAt
+        // 更新聊天的 updatedAt 并增加未读计数
         await db.chat.update({
           where: { id: chatId },
-          data: { updatedAt: new Date() },
+          data: {
+            updatedAt: new Date(),
+            unreadCount: { increment: 1 },
+          },
         });
 
         return {
           message: {
-            ...message,
+            id: message.id,
+            text: message.text,
+            createdAt: message.createdAt,
             timestamp: formatTimestamp(message.createdAt),
+            sender: { id: message.senderId },
           },
         };
       } catch (error) {

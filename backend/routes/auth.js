@@ -68,6 +68,10 @@ const authRoutes = async (fastify, options) => {
                   following: {
                     type: "integer",
                   },
+                  createdAt: {
+                    type: "string",
+                    format: "date-time",
+                  },
                 },
               },
               token: {
@@ -118,7 +122,13 @@ const authRoutes = async (fastify, options) => {
         // 生成JWT token
         const token = fastify.jwt.sign({ userId: user.id });
 
-        return reply.send({ user: userWithoutPassword, token });
+        return reply.send({
+          user: {
+            ...userWithoutPassword,
+            createdAt: user.createdAt.toISOString(),
+          },
+          token,
+        });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(500).send({ msg: "服务器内部错误" });
@@ -184,6 +194,10 @@ const authRoutes = async (fastify, options) => {
                   following: {
                     type: "integer",
                   },
+                  createdAt: {
+                    type: "string",
+                    format: "date-time",
+                  },
                 },
               },
               token: {
@@ -220,7 +234,13 @@ const authRoutes = async (fastify, options) => {
         // 返回用户信息（不包含密码）
         const { password: _, ...userWithoutPassword } = user;
 
-        return reply.send({ user: userWithoutPassword, token });
+        return reply.send({
+          user: {
+            ...userWithoutPassword,
+            createdAt: user.createdAt.toISOString(),
+          },
+          token,
+        });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(500).send({ msg: "服务器内部错误" });
@@ -277,6 +297,10 @@ const authRoutes = async (fastify, options) => {
                   following: {
                     type: "integer",
                   },
+                  createdAt: {
+                    type: "string",
+                    format: "date-time",
+                  },
                 },
               },
             },
@@ -301,7 +325,12 @@ const authRoutes = async (fastify, options) => {
         // 过滤掉密码字段
         const { password: _, ...userWithoutPassword } = user;
 
-        return reply.send({ user: userWithoutPassword });
+        return reply.send({
+          user: {
+            ...userWithoutPassword,
+            createdAt: user.createdAt.toISOString(),
+          },
+        });
       } catch (error) {
         fastify.log.error(error);
         return reply.code(401).send({ msg: "未授权" });

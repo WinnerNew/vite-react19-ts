@@ -101,7 +101,7 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
           <img
             src={currentUser.avatar}
             alt="me"
-            className="w-8 h-8 rounded-full border border-zinc-800"
+            className="w-8 h-8 rounded-full border border-zinc-800 object-cover"
           />
           <div className="mx-auto">
             <svg viewBox="0 0 24 24" className="h-6 w-6 fill-white">
