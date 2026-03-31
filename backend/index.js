@@ -34,6 +34,14 @@ fastify.register(require("@fastify/swagger"), {
     schemes: ["http"],
     consumes: ["application/json"],
     produces: ["application/json"],
+    securityDefinitions: {
+      bearerAuth: {
+        type: "apiKey",
+        name: "Authorization",
+        in: "header",
+        description: "Bearer token for authentication",
+      },
+    },
   },
 });
 
