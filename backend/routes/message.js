@@ -26,10 +26,15 @@ const messageRoutes = async (fastify, options) => {
         const { userId } = await request.jwtVerify();
 
         const chats = await db.chat.findMany({
-          where: { users: { some: { id: userId } } },
+          where: {
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
           orderBy: { updatedAt: "desc" },
           include: {
-            users: {
+            user1: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+            user2: {
               select: { id: true, username: true, handle: true, avatar: true },
             },
             messages: {
@@ -83,9 +88,13 @@ const messageRoutes = async (fastify, options) => {
 
         const existingChat = await db.chat.findFirst({
           where: {
-            AND: [
-              { users: { some: { id: userId } } },
-              { users: { some: { id: recipient_id } } },
+            OR: [
+              {
+                AND: [{ user1Id: userId }, { user2Id: recipient_id }],
+              },
+              {
+                AND: [{ user1Id: recipient_id }, { user2Id: userId }],
+              },
             ],
           },
         });
@@ -96,7 +105,8 @@ const messageRoutes = async (fastify, options) => {
 
         const chat = await db.chat.create({
           data: {
-            users: { connect: [{ id: userId }, { id: recipient_id }] },
+            user1Id: userId,
+            user2Id: recipient_id,
           },
         });
 
@@ -132,7 +142,10 @@ const messageRoutes = async (fastify, options) => {
         const { limit = 50, before } = request.query;
 
         const chat = await db.chat.findFirst({
-          where: { id: chat_id, users: { some: { id: userId } } },
+          where: {
+            id: chat_id,
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
         });
 
         if (!chat) {
@@ -188,8 +201,18 @@ const messageRoutes = async (fastify, options) => {
         const { content } = request.body;
 
         const chat = await db.chat.findFirst({
-          where: { id: chat_id, users: { some: { id: userId } } },
-          include: { users: true },
+          where: {
+            id: chat_id,
+            OR: [{ user1Id: userId }, { user2Id: userId }],
+          },
+          include: {
+            user1: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+            user2: {
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+          },
         });
 
         if (!chat) {
@@ -210,7 +233,7 @@ const messageRoutes = async (fastify, options) => {
           data: { updatedAt: new Date() },
         });
 
-        const recipient = chat.users.find((u) => u.id !== userId);
+        const recipient = chat.user1Id === userId ? chat.user2 : chat.user1;
         if (recipient) {
           await db.notification.create({
             data: {
@@ -235,10 +258,15 @@ const messageRoutes = async (fastify, options) => {
       const { userId } = await request.jwtVerify();
 
       const chats = await db.chat.findMany({
-        where: { users: { some: { id: userId } } },
+        where: {
+          OR: [{ user1Id: userId }, { user2Id: userId }],
+        },
         orderBy: { updatedAt: "desc" },
         include: {
-          users: {
+          user1: {
+            select: { id: true, username: true, handle: true, avatar: true },
+          },
+          user2: {
             select: { id: true, username: true, handle: true, avatar: true },
           },
           messages: {

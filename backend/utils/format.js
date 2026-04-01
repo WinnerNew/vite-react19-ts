@@ -88,7 +88,7 @@ const formatMessage = (message, currentUserId) => {
 
 const formatChat = (chat, currentUserId) => {
   if (!chat) return null;
-  const otherUser = chat.users?.find((u) => u.id !== currentUserId);
+  const otherUser = chat.user1Id === currentUserId ? chat.user2 : chat.user1;
   const lastMessage = chat.messages?.[0];
 
   return {
