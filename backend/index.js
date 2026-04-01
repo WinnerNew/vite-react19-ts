@@ -1,6 +1,6 @@
-const fastify = require("fastify")({ 
+const fastify = require("fastify")({
   logger: true,
-  bodyLimit: 52428800 // 50MB
+  bodyLimit: 52428800, // 50MB
 });
 const dotenv = require("dotenv");
 
