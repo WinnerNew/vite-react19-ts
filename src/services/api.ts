@@ -77,7 +77,7 @@ export const authApi = {
   },
 
   getCurrentUser: async () => {
-    const data = await request<{ user: User }>("/auth/users/me");
+    const data = await request<{ user: User }>("/auth/me");
     return data.user;
   },
 
@@ -126,8 +126,8 @@ export const userApi = {
     website: string,
     avatar: string,
   ) => {
-    const data = await request<User>("/user/me", {
-      method: "PATCH",
+    const data = await request<User>("/user/profile", {
+      method: "PUT",
       body: JSON.stringify({ username, bio, location, website, avatar }),
     });
     return data;
