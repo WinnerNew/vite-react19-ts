@@ -1,11 +1,47 @@
-
 import React, { useState } from 'react';
-import { ArrowLeft, Moon, Languages, ShieldAlert, Database, Info, CheckCircle2, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Moon, Languages, ShieldAlert, Database, Info, CheckCircle2, Loader2, ChevronRight, LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SystemSettingsViewProps {
   onBack: () => void;
 }
+
+const SectionHeader = ({ title }: { title: string }) => (
+  <h3 className="px-4 pt-6 pb-2 text-[13px] font-bold text-zinc-500 uppercase tracking-wider">
+    {title}
+  </h3>
+);
+
+const ToggleItem = ({ icon: Icon, label, value, onToggle }: { icon: LucideIcon; label: string; value: boolean; onToggle: () => void }) => (
+  <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-900">
+    <div className="flex items-center gap-4">
+      <Icon size={20} className="text-zinc-400" />
+      <span className="text-[15px] font-medium">{label}</span>
+    </div>
+    <button 
+      onClick={onToggle}
+      className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${value ? 'bg-sky-500' : 'bg-zinc-700'}`}
+    >
+      <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+  </div>
+);
+
+const LinkItem = ({ icon: Icon, label, value, onClick }: { icon: LucideIcon; label: string; value?: string; onClick?: () => void }) => (
+  <div 
+    onClick={onClick}
+    className="flex items-center justify-between px-4 py-4 border-b border-zinc-900 cursor-pointer hover:bg-zinc-900/30 transition-colors"
+  >
+    <div className="flex items-center gap-4">
+      <Icon size={20} className="text-zinc-400" />
+      <span className="text-[15px] font-medium">{label}</span>
+    </div>
+    <div className="flex items-center gap-2">
+      <span className="text-[14px] text-zinc-500">{value}</span>
+      <ChevronRight size={16} className="text-zinc-700" />
+    </div>
+  </div>
+);
 
 const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({ onBack }) => {
   const [isClearing, setIsClearing] = useState(false);
@@ -21,43 +57,6 @@ const SystemSettingsView: React.FC<SystemSettingsViewProps> = ({ onBack }) => {
       setTimeout(() => setShowSuccess(false), 2000);
     }, 1500);
   };
-
-  const SectionHeader = ({ title }: { title: string }) => (
-    <h3 className="px-4 pt-6 pb-2 text-[13px] font-bold text-zinc-500 uppercase tracking-wider">
-      {title}
-    </h3>
-  );
-
-  const ToggleItem = ({ icon: Icon, label, value, onToggle }: any) => (
-    <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-900">
-      <div className="flex items-center gap-4">
-        <Icon size={20} className="text-zinc-400" />
-        <span className="text-[15px] font-medium">{label}</span>
-      </div>
-      <button 
-        onClick={onToggle}
-        className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${value ? 'bg-sky-500' : 'bg-zinc-700'}`}
-      >
-        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${value ? 'translate-x-5' : 'translate-x-0'}`} />
-      </button>
-    </div>
-  );
-
-  const LinkItem = ({ icon: Icon, label, value, onClick }: any) => (
-    <div 
-      onClick={onClick}
-      className="flex items-center justify-between px-4 py-4 border-b border-zinc-900 cursor-pointer hover:bg-zinc-900/30 transition-colors"
-    >
-      <div className="flex items-center gap-4">
-        <Icon size={20} className="text-zinc-400" />
-        <span className="text-[15px] font-medium">{label}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[14px] text-zinc-500">{value}</span>
-        <ChevronRight size={16} className="text-zinc-700" />
-      </div>
-    </div>
-  );
 
   return (
     <div className="flex flex-col h-full bg-black">

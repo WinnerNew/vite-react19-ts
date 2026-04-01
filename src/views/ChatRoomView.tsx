@@ -23,7 +23,6 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     const fetchMessages = async () => {
       try {
         const data = await messageApi.getMessages(chat.id);
-        // 只有当消息数量变化时才更新，避免频繁重绘
         if (data.length !== messages.length) {
           setMessages(data);
         }
@@ -35,7 +34,7 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
     };
 
     fetchMessages();
-    const interval = setInterval(fetchMessages, 3000); // 3秒轮询一次
+    const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [chat.id, messages.length]);
 
@@ -67,10 +66,10 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
             </button>
             <div className="flex flex-col">
               <h2 className="text-[15px] font-bold leading-tight">
-                {chat.participant.username}
+                {chat.user.username}
               </h2>
               <p className="text-[12px] text-zinc-500 leading-tight">
-                {chat.participant.handle}
+                {chat.user.handle}
               </p>
             </div>
           </div>
@@ -89,11 +88,11 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center py-20 text-center">
               <img
-                src={chat.participant.avatar}
+                src={chat.user.avatar}
                 className="w-16 h-16 rounded-full mx-auto mb-4 border border-zinc-800 object-cover"
               />
-              <h3 className="text-xl font-bold">{chat.participant.username}</h3>
-              <p className="text-zinc-500 text-sm">{chat.participant.handle}</p>
+              <h3 className="text-xl font-bold">{chat.user.username}</h3>
+              <p className="text-zinc-500 text-sm">{chat.user.handle}</p>
               <div className="text-zinc-500 mt-10">
                 No messages yet. Start the conversation!
               </div>
@@ -111,10 +110,10 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
                       : "bg-zinc-800 text-zinc-100 rounded-bl-sm"
                   }`}
                 >
-                  {msg.text}
+                  {msg.content}
                 </div>
                 <span className="text-[11px] text-zinc-500 mt-1">
-                  {msg.timestamp}
+                  {msg.created_at}
                 </span>
               </div>
             ))
