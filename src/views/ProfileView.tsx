@@ -14,6 +14,7 @@ import { userApi, messageApi } from "../services/api";
 import PostCard from "../components/PostCard";
 import ImagePreview from "../components/ImagePreview";
 import ReplyModal from "../components/ReplyModal";
+import { useToast } from "../components/Toast";
 
 interface ProfileViewProps {
   currentUser: User;
@@ -40,6 +41,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const [activeTab, setActiveTab] = useState("Posts");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [replyPost, setReplyPost] = useState<Post | null>(null);
+  const { showToast } = useToast();
 
   const isOwnProfile = !id || id === currentUser.id;
 
@@ -54,11 +56,13 @@ const ProfileView: React.FC<ProfileViewProps> = ({
       setProfileUser(userData);
       setPosts(userPosts);
     } catch (error) {
-      console.error("Failed to fetch profile:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to fetch profile";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
-  }, [id, currentUser.id]);
+  }, [id, currentUser.id, showToast]);
 
   useEffect(() => {
     fetchProfileData();
@@ -67,19 +71,19 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const handleFollow = async () => {
     if (!profileUser || isOwnProfile || isFollowingLoading) return;
     setIsFollowingLoading(true);
-    // 乐观更新
-    const newIsFollowing = !profileUser.isFollowing;
+    const newIsFollowing = !profileUser.is_following;
     setProfileUser({
       ...profileUser,
-      isFollowing: newIsFollowing,
+      is_following: newIsFollowing,
       followers: profileUser.followers + (newIsFollowing ? 1 : -1),
     });
 
     try {
       await userApi.followUser(profileUser.id);
     } catch (error) {
-      console.error("Follow failed:", error);
-      // 回滚
+      const errorMessage =
+        error instanceof Error ? error.message : "Follow failed";
+      showToast(errorMessage, "error");
       setProfileUser(profileUser);
     } finally {
       setIsFollowingLoading(false);
@@ -89,11 +93,17 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const handleStartMessage = async () => {
     if (!profileUser || isOwnProfile) return;
     try {
-      const chat = await messageApi.createChat(profileUser.id);
+      const chatId = await messageApi.createChat(profileUser.id);
+      const chat: Chat = {
+        id: chatId.id,
+        user: profileUser,
+      };
       onSelectChat(chat);
       navigate("/chat");
     } catch (error) {
-      console.error("Failed to start message:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to start message";
+      showToast(errorMessage, "error");
     }
   };
 
@@ -206,12 +216,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({
                   onClick={handleFollow}
                   disabled={isFollowingLoading}
                   className={`px-6 py-1.5 rounded-full text-sm font-bold transition-all ${
-                    profileUser.isFollowing
+                    profileUser.is_following
                       ? "border border-zinc-800 text-white hover:border-red-900 hover:text-red-500 hover:bg-red-950/20"
                       : "bg-white text-black hover:bg-zinc-200"
                   }`}
                 >
-                  {profileUser.isFollowing ? "Following" : "Follow"}
+                  {profileUser.is_following ? "Following" : "Follow"}
                 </button>
               </>
             )}
@@ -247,7 +257,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
             )}
             <div className="flex items-center gap-1">
               <Calendar size={14} />
-              <span>{formatDate(profileUser.createdAt)}</span>
+              <span>{formatDate(profileUser.created_at)}</span>
             </div>
           </div>
 

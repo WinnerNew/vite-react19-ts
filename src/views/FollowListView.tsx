@@ -46,14 +46,13 @@ const FollowListView: React.FC<FollowListViewProps> = ({ currentUser }) => {
     e.stopPropagation();
     try {
       await userApi.followUser(targetUser.id);
-      // 局部更新列表状态
       setUsers((prev) =>
         prev.map((u) =>
           u.id === targetUser.id
             ? {
                 ...u,
-                isFollowing: !u.isFollowing,
-                followers: u.followers + (!u.isFollowing ? 1 : -1),
+                is_following: !u.is_following,
+                followers: u.followers + (!u.is_following ? 1 : -1),
               }
             : u,
         ),
@@ -149,12 +148,12 @@ const FollowListView: React.FC<FollowListViewProps> = ({ currentUser }) => {
                   <button
                     onClick={(e) => handleFollow(e, user)}
                     className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${
-                      user.isFollowing
+                      user.is_following
                         ? "border border-zinc-800 text-white hover:border-red-900 hover:text-red-500 hover:bg-red-950/20"
                         : "bg-white text-black hover:bg-zinc-200"
                     }`}
                   >
-                    {user.isFollowing ? "Following" : "Follow"}
+                    {user.is_following ? "Following" : "Follow"}
                   </button>
                 )}
               </div>

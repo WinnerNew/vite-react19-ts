@@ -21,8 +21,7 @@ const NotificationsView: React.FC = () => {
     setIsLoading(true);
     try {
       const data = await notificationApi.getNotifications();
-      setNotifications(data);
-      // 获取后标记为已读
+      setNotifications(data.items);
       await notificationApi.markAllAsRead();
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
@@ -65,11 +64,26 @@ const NotificationsView: React.FC = () => {
     }
   };
 
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "now";
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    if (days < 7) return `${days}d`;
+    return date.toLocaleDateString();
+  };
+
   const handleNotificationClick = (n: Notification) => {
     if (n.type === "FOLLOW") {
-      navigate(`/profile/${n.actorId}`);
-    } else if (n.postId) {
-      navigate(`/post/${n.postId}`);
+      navigate(`/profile/${n.actor.id}`);
+    } else if (n.post) {
+      navigate(`/post/${n.post.id}`);
     }
   };
 
@@ -118,7 +132,7 @@ const NotificationsView: React.FC = () => {
             <div
               key={n.id}
               onClick={() => handleNotificationClick(n)}
-              className={`p-4 flex gap-4 hover:bg-zinc-900/30 transition-colors cursor-pointer ${!n.isRead ? "bg-sky-500/5" : ""}`}
+              className={`p-4 flex gap-4 hover:bg-zinc-900/30 transition-colors cursor-pointer ${!n.read ? "bg-sky-500/5" : ""}`}
             >
               <div className="flex-shrink-0 pt-1">
                 {renderNotificationIcon(n.type)}
@@ -131,17 +145,19 @@ const NotificationsView: React.FC = () => {
                     alt="avatar"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/profile/${n.actorId}`);
+                      navigate(`/profile/${n.actor.id}`);
                     }}
                   />
-                  <span className="text-xs text-zinc-500">{n.time}</span>
+                  <span className="text-xs text-zinc-500">
+                    {formatTime(n.created_at)}
+                  </span>
                 </div>
                 <p className="text-[15px] leading-relaxed text-zinc-100">
                   <span
                     className="font-bold hover:underline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/profile/${n.actorId}`);
+                      navigate(`/profile/${n.actor.id}`);
                     }}
                   >
                     {n.actor.username}

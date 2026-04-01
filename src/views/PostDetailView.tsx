@@ -50,33 +50,33 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
 
   const handleLike = async () => {
     if (!post) return;
-    const newLiked = !post.isLiked;
+    const newLiked = !post.is_liked;
     setPost({
       ...post,
-      isLiked: newLiked,
-      likesCount: post.likesCount + (newLiked ? 1 : -1),
+      is_liked: newLiked,
+      likes_count: post.likes_count + (newLiked ? 1 : -1),
     });
     try {
       await postApi.likePost(post.id);
     } catch (error) {
       console.error("Failed to like:", error);
-      fetchPostDetail(); // 回滚
+      fetchPostDetail();
     }
   };
 
   const handleRepost = async () => {
     if (!post) return;
-    const newReposted = !post.isReposted;
+    const newReposted = !post.is_reposted;
     setPost({
       ...post,
-      isReposted: newReposted,
-      repostsCount: post.repostsCount + (newReposted ? 1 : -1),
+      is_reposted: newReposted,
+      reposts_count: post.reposts_count + (newReposted ? 1 : -1),
     });
     try {
       await postApi.repostPost(post.id);
     } catch (error) {
       console.error("Failed to repost:", error);
-      fetchPostDetail(); // 回滚
+      fetchPostDetail();
     }
   };
 
@@ -104,7 +104,6 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-black text-white pb-20">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md border-b border-zinc-900 flex items-center p-3">
         <button
           onClick={() => navigate(-1)}
@@ -115,18 +114,16 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
         <h2 className="text-xl font-bold">Post</h2>
       </header>
 
-      {/* Parent Post if exists */}
-      {post.parentPost && (
+      {post.parent_post && (
         <div className="border-b border-zinc-900">
           <PostCard
-            post={post.parentPost}
+            post={post.parent_post}
             onImagePreview={setPreviewImage}
             onReply={setReplyPost}
           />
         </div>
       )}
 
-      {/* Main Post */}
       <div className="p-4 border-b border-zinc-900">
         <div className="flex items-center justify-between mb-4">
           <div
@@ -152,11 +149,11 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
           </button>
         </div>
 
-        {post.parentId && (
+        {post.parent_id && (
           <p className="text-zinc-500 text-[15px] mb-2 -mt-2">
             Replying to{" "}
             <span className="text-sky-500">
-              @{post.parentPost?.author.handle || "user"}
+              @{post.parent_post?.author.handle || "user"}
             </span>
           </p>
         )}
@@ -179,16 +176,16 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
         )}
 
         <div className="text-zinc-500 text-[15px] mb-4 pb-4 border-b border-zinc-900">
-          {post.fullTimestamp}
+          {post.full_timestamp}
         </div>
 
         <div className="flex gap-5 mb-4 py-1 border-b border-zinc-900 pb-4">
           <div className="flex gap-1 items-center">
-            <span className="font-bold text-white">{post.repostsCount}</span>
+            <span className="font-bold text-white">{post.reposts_count}</span>
             <span className="text-zinc-500">Reposts</span>
           </div>
           <div className="flex gap-1 items-center">
-            <span className="font-bold text-white">{post.likesCount}</span>
+            <span className="font-bold text-white">{post.likes_count}</span>
             <span className="text-zinc-500">Likes</span>
           </div>
         </div>
@@ -202,15 +199,15 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
           </button>
           <button
             onClick={handleRepost}
-            className={`p-2 hover:bg-green-500/10 hover:text-green-500 rounded-full transition-colors ${post.isReposted ? "text-green-500" : ""}`}
+            className={`p-2 hover:bg-green-500/10 hover:text-green-500 rounded-full transition-colors ${post.is_reposted ? "text-green-500" : ""}`}
           >
             <Repeat2 size={22} />
           </button>
           <button
             onClick={handleLike}
-            className={`p-2 hover:bg-rose-500/10 hover:text-rose-500 rounded-full transition-colors ${post.isLiked ? "text-rose-500" : ""}`}
+            className={`p-2 hover:bg-rose-500/10 hover:text-rose-500 rounded-full transition-colors ${post.is_liked ? "text-rose-500" : ""}`}
           >
-            <Heart size={22} className={post.isLiked ? "fill-rose-500" : ""} />
+            <Heart size={22} className={post.is_liked ? "fill-rose-500" : ""} />
           </button>
           <button className="p-2 hover:bg-sky-500/10 hover:text-sky-500 rounded-full transition-colors">
             <Share size={22} />
@@ -218,7 +215,6 @@ const PostDetailView: React.FC<PostDetailViewProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      {/* Replies */}
       <div className="flex flex-col">
         {replies.map((reply) => (
           <PostCard

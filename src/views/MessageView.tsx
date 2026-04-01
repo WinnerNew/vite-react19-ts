@@ -24,9 +24,24 @@ const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
     };
 
     fetchChats();
-    const interval = setInterval(fetchChats, 5000); // 5秒轮询一次列表
+    const interval = setInterval(fetchChats, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "now";
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    if (days < 7) return `${days}d`;
+    return date.toLocaleDateString();
+  };
 
   if (loading) {
     return (
@@ -106,31 +121,27 @@ const MessageView: React.FC<MessageViewProps> = ({ onSelectChat }) => {
             >
               <div className="relative flex-shrink-0">
                 <img
-                  src={chat.participant.avatar}
+                  src={chat.user.avatar}
                   className="w-12 h-12 rounded-full border border-zinc-800 object-cover"
                 />
-                {chat.unreadCount > 0 && (
-                  <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-sky-500 rounded-full border-2 border-black" />
-                )}
               </div>
               <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div className="flex justify-between items-baseline mb-0.5">
                   <div className="flex gap-1 min-w-0 items-center">
                     <span className="font-bold text-[15px] truncate group-hover:underline">
-                      {chat.participant.username}
+                      {chat.user.username}
                     </span>
                     <span className="text-zinc-500 text-[14px] truncate">
-                      {chat.participant.handle}
+                      {chat.user.handle}
                     </span>
                   </div>
                   <span className="text-zinc-500 text-[13px] flex-shrink-0 ml-2">
-                    {chat.timestamp}
+                    {chat.last_message &&
+                      formatTime(chat.last_message.created_at)}
                   </span>
                 </div>
-                <p
-                  className={`text-[14px] truncate ${chat.unreadCount > 0 ? "text-zinc-100 font-medium" : "text-zinc-500"}`}
-                >
-                  {chat.lastMessage}
+                <p className="text-[14px] truncate text-zinc-500">
+                  {chat.last_message?.content}
                 </p>
               </div>
             </div>
