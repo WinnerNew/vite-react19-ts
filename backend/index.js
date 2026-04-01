@@ -10,7 +10,9 @@ dotenv.config();
 // 配置CORS
 fastify.register(require("@fastify/cors"), {
   origin: "*", // 在生产环境中应该设置具体的前端域名
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 });
 
 // 配置JWT

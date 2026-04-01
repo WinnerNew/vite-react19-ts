@@ -11,6 +11,72 @@ const {
   paginated,
 } = require("../utils");
 
+const getUserChatsQuery = (userId) => ({
+  where: {
+    OR: [{ user1Id: userId }, { user2Id: userId }],
+  },
+  orderBy: { updatedAt: "desc" },
+  include: {
+    user1: {
+      select: { id: true, username: true, handle: true, avatar: true },
+    },
+    user2: {
+      select: { id: true, username: true, handle: true, avatar: true },
+    },
+    messages: {
+      orderBy: { createdAt: "desc" },
+      take: 1,
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            handle: true,
+            avatar: true,
+          },
+        },
+      },
+    },
+  },
+});
+
+const validateChatAccess = async (chatId, userId, includeUsers = false) => {
+  const query = {
+    where: {
+      id: chatId,
+      OR: [{ user1Id: userId }, { user2Id: userId }],
+    },
+  };
+
+  if (includeUsers) {
+    query.include = {
+      user1: {
+        select: { id: true, username: true, handle: true, avatar: true },
+      },
+      user2: {
+        select: { id: true, username: true, handle: true, avatar: true },
+      },
+    };
+  }
+
+  return await db.chat.findFirst(query);
+};
+
+const findExistingChat = async (userId, recipientId) => {
+  return await db.chat.findFirst({
+    where: {
+      OR: [
+        {
+          AND: [{ user1Id: userId }, { user2Id: recipientId }],
+        },
+        {
+          AND: [{ user1Id: recipientId }, { user2Id: userId }],
+        },
+      ],
+    },
+  });
+};
+
 const messageRoutes = async (fastify, options) => {
   fastify.get(
     "/chats",
@@ -24,36 +90,7 @@ const messageRoutes = async (fastify, options) => {
     async (request, reply) => {
       try {
         const { userId } = await request.jwtVerify();
-
-        const chats = await db.chat.findMany({
-          where: {
-            OR: [{ user1Id: userId }, { user2Id: userId }],
-          },
-          orderBy: { updatedAt: "desc" },
-          include: {
-            user1: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
-            user2: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
-            messages: {
-              orderBy: { createdAt: "desc" },
-              take: 1,
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    handle: true,
-                    avatar: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-
+        const chats = await db.chat.findMany(getUserChatsQuery(userId));
         const formattedChats = chats.map((chat) => formatChat(chat, userId));
         return paginated(reply, formattedChats, formattedChats.length);
       } catch (err) {
@@ -86,18 +123,7 @@ const messageRoutes = async (fastify, options) => {
           return badRequest(reply, "不能与自己创建聊天");
         }
 
-        const existingChat = await db.chat.findFirst({
-          where: {
-            OR: [
-              {
-                AND: [{ user1Id: userId }, { user2Id: recipient_id }],
-              },
-              {
-                AND: [{ user1Id: recipient_id }, { user2Id: userId }],
-              },
-            ],
-          },
-        });
+        const existingChat = await findExistingChat(userId, recipient_id);
 
         if (existingChat) {
           return success(reply, { id: existingChat.id });
@@ -141,12 +167,7 @@ const messageRoutes = async (fastify, options) => {
         const { chat_id } = request.params;
         const { limit = 50, before } = request.query;
 
-        const chat = await db.chat.findFirst({
-          where: {
-            id: chat_id,
-            OR: [{ user1Id: userId }, { user2Id: userId }],
-          },
-        });
+        const chat = await validateChatAccess(chat_id, userId);
 
         if (!chat) {
           return notFound(reply, "聊天不存在");
@@ -200,20 +221,7 @@ const messageRoutes = async (fastify, options) => {
         const { chat_id } = request.params;
         const { content } = request.body;
 
-        const chat = await db.chat.findFirst({
-          where: {
-            id: chat_id,
-            OR: [{ user1Id: userId }, { user2Id: userId }],
-          },
-          include: {
-            user1: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
-            user2: {
-              select: { id: true, username: true, handle: true, avatar: true },
-            },
-          },
-        });
+        const chat = await validateChatAccess(chat_id, userId, true);
 
         if (!chat) {
           return notFound(reply, "聊天不存在", "CHAT_NOT_FOUND");
@@ -256,36 +264,7 @@ const messageRoutes = async (fastify, options) => {
   fastify.get("/", async (request, reply) => {
     try {
       const { userId } = await request.jwtVerify();
-
-      const chats = await db.chat.findMany({
-        where: {
-          OR: [{ user1Id: userId }, { user2Id: userId }],
-        },
-        orderBy: { updatedAt: "desc" },
-        include: {
-          user1: {
-            select: { id: true, username: true, handle: true, avatar: true },
-          },
-          user2: {
-            select: { id: true, username: true, handle: true, avatar: true },
-          },
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  handle: true,
-                  avatar: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
+      const chats = await db.chat.findMany(getUserChatsQuery(userId));
       const formattedChats = chats.map((chat) => formatChat(chat, userId));
       return paginated(reply, formattedChats, formattedChats.length);
     } catch (err) {
