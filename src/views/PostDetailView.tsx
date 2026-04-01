@@ -9,7 +9,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { Post, User } from "../types";
-import { postApi } from "../services/api";
+import { postApi } from "../services";
 import PostCard from "../components/PostCard";
 import ReplyModal from "../components/ReplyModal";
 import ImagePreview from "../components/ImagePreview";

@@ -4,7 +4,7 @@ import ImagePreview from "../components/ImagePreview";
 import ReplyModal from "../components/ReplyModal";
 import { Post, User } from "../types";
 import { Loader2, Image, List, MapPin } from "lucide-react";
-import { postApi } from "../services/api";
+import { postApi } from "../services";
 import { useToast } from "../components/Toast";
 
 interface HomeViewProps {

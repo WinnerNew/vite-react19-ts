@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Settings, Search, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { postApi, userApi } from "../services/api";
+import { postApi, userApi } from "../services";
 import { Post, User } from "../types";
 import PostCard from "../components/PostCard";
 import ImagePreview from "../components/ImagePreview";

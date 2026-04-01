@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Image, List, MapPin } from "lucide-react";
 import { Post, User } from "../types";
-import { postApi } from "../services/api";
+import { postApi } from "../services";
 
 interface ReplyModalProps {
   isOpen: boolean;

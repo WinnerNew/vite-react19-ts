@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { authApi } from "../services/api";
+import { authApi } from "../services";
 import { useToast } from "../components/Toast";
 
 const RegisterView: React.FC = () => {

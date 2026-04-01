@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { User } from "../types";
-import { authApi } from "../services/api";
+import { authApi } from "../services";
 import { useToast } from "../components/Toast";
 
 interface LoginViewProps {

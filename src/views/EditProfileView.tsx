@@ -114,7 +114,7 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-black">
-      <header className="sticky top-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-4 py-3 border-b border-zinc-900 pt-[env(safe-area-inset-top,8px)]">
+      <header className="sticky top-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-4 py-3 border-b border-zinc-900">
         <div className="flex items-center gap-6">
           <button
             onClick={onCancel}

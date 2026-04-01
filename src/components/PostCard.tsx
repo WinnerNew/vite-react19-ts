@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { Post } from "../types";
 
 import { useNavigate } from "react-router-dom";
-import { postApi } from "../services/api";
+import { postApi } from "../services";
 
 interface PostCardProps {
   post: Post;

@@ -10,7 +10,7 @@ import {
   Mail,
 } from "lucide-react";
 import { User, Post, Chat } from "../types";
-import { userApi, messageApi } from "../services/api";
+import { userApi, messageApi } from "../services";
 import PostCard from "../components/PostCard";
 import ImagePreview from "../components/ImagePreview";
 import ReplyModal from "../components/ReplyModal";
