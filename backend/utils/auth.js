@@ -17,16 +17,7 @@ const requiredAuth = async (request, reply) => {
   }
 };
 
-const authMiddleware = async (request, reply) => {
-  const userId = await requiredAuth(request, reply);
-  if (!userId) {
-    return reply;
-  }
-  return userId;
-};
-
 module.exports = {
   optionalAuth,
   requiredAuth,
-  authMiddleware,
 };
