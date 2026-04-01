@@ -10,11 +10,12 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   size = 32,
   className = "text-sky-500",
 }) => {
-  const sizeClass =
-    typeof size === "number" ? `h-${size / 4} w-${size / 4}` : "";
+  const sizeStyle =
+    typeof size === "number" ? { width: size, height: size } : {};
   return (
     <Loader2
-      className={`animate-spin ${className} ${sizeClass}`}
+      className={`animate-spin ${className}`}
+      style={sizeStyle}
       size={typeof size === "number" ? size : undefined}
     />
   );
