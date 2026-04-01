@@ -2,7 +2,6 @@ import { User, Post, Message, Chat, Notification } from "../types";
 
 const API_BASE_URL = "http://localhost:3001/api";
 
-// 存储token
 const getToken = (): string | null => {
   return localStorage.getItem("token");
 };
@@ -15,7 +14,6 @@ const removeToken = (): void => {
   localStorage.removeItem("token");
 };
 
-// 通用请求函数
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -39,102 +37,88 @@ async function request<T>(
     headers,
   });
 
+  const data = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.msg || `Request failed with status ${response.status}`,
-    );
+    const errorMessage =
+      data.message || `Request failed with status ${response.status}`;
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  if (data.code !== 20000) {
+    throw new Error(data.message || "Request failed");
+  }
+
+  return data.data;
 }
 
-// 认证相关API
 export const authApi = {
-  // 注册
   register: async (
     username: string,
     handle: string,
     password: string,
     avatar: string,
   ) => {
-    const response = await request<{ user: User; token: string }>(
-      "/auth/register",
-      {
-        method: "POST",
-        body: JSON.stringify({ username, handle, password, avatar }),
-      },
-    );
-    setToken(response.token);
-    return response.user;
+    const data = await request<{ user: User; token: string }>("/auth/users", {
+      method: "POST",
+      body: JSON.stringify({ username, handle, password, avatar }),
+    });
+    setToken(data.token);
+    return data.user;
   },
 
-  // 登录
   login: async (handle: string, password: string) => {
-    const response = await request<{ user: User; token: string }>(
-      "/auth/login",
-      {
-        method: "POST",
-        body: JSON.stringify({ handle, password }),
-      },
-    );
-    setToken(response.token);
-    return response.user;
+    const data = await request<{ user: User; token: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ handle, password }),
+    });
+    setToken(data.token);
+    return data.user;
   },
 
-  // 获取当前用户信息
   getCurrentUser: async () => {
-    const response = await request<{ user: User }>("/auth/me");
-    return response.user;
+    const data = await request<{ user: User }>("/auth/users/me");
+    return data.user;
   },
 
-  // 登出
   logout: () => {
     removeToken();
   },
 };
 
-// 用户相关API
 export const userApi = {
-  // 获取用户资料
   getUser: async (id: string) => {
-    const response = await request<{ user: User }>(`/user/${id}`);
-    return response.user;
+    const data = await request<User>(`/user/${id}`);
+    return data;
   },
 
-  // 获取用户资料
   getProfile: async (id: string) => {
-    const response = await request<{ user: User }>(`/user/${id}`);
-    return response.user;
+    const data = await request<User>(`/user/${id}`);
+    return data;
   },
 
-  // 搜索用户
   searchUsers: async (q: string) => {
-    const response = await request<{ users: User[] }>(
-      `/user/search?q=${encodeURIComponent(q)}`,
+    const data = await request<{ items: User[]; total: number }>(
+      `/user?search=${encodeURIComponent(q)}`,
     );
-    return response.users;
+    return data.items;
   },
 
-  // 获取推荐关注
   getSuggestions: async () => {
-    const response = await request<{ users: User[] }>("/user/suggestions");
-    return response.users;
-  },
-
-  // 关注/取消关注
-  followUser: async (id: string) => {
-    const response = await request<{ followed: boolean }>(
-      `/user/${id}/follow`,
-      {
-        method: "POST",
-        body: JSON.stringify({}),
-      },
+    const data = await request<{ items: User[]; total: number }>(
+      "/user/suggestions",
     );
-    return response;
+    return data.items;
   },
 
-  // 更新用户资料
+  followUser: async (id: string) => {
+    const data = await request<{ followed: boolean }>(`/user/${id}/follow`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    return data;
+  },
+
   updateProfile: async (
     username: string,
     bio: string,
@@ -142,152 +126,175 @@ export const userApi = {
     website: string,
     avatar: string,
   ) => {
-    const response = await request<{ user: User }>("/user/profile", {
-      method: "PUT",
+    const data = await request<User>("/user/me", {
+      method: "PATCH",
       body: JSON.stringify({ username, bio, location, website, avatar }),
     });
-    return response.user;
+    return data;
   },
 
-  // 获取用户的帖子
   getUserPosts: async (id: string) => {
-    const response = await request<{ posts: Post[] }>(`/user/${id}/posts`);
-    return response.posts;
+    const data = await request<{ items: Post[]; total: number }>(
+      `/user/${id}/posts`,
+    );
+    return data.items;
   },
 
-  // 获取粉丝列表
   getFollowers: async (id: string) => {
-    const response = await request<{ users: User[] }>(`/user/${id}/followers`);
-    return response.users;
+    const data = await request<{ items: User[]; total: number }>(
+      `/user/${id}/followers`,
+    );
+    return data.items;
   },
 
-  // 获取关注列表
   getFollowing: async (id: string) => {
-    const response = await request<{ users: User[] }>(`/user/${id}/following`);
-    return response.users;
+    const data = await request<{ items: User[]; total: number }>(
+      `/user/${id}/following`,
+    );
+    return data.items;
   },
 };
 
-// 帖子相关API
 export const postApi = {
-  // 创建帖子或回复
-  createPost: async (content: string, image?: string, parentId?: string) => {
-    const response = await request<Post>("/post", {
+  createPost: async (content: string, image?: string, parent_id?: string) => {
+    const data = await request<Post>("/post", {
       method: "POST",
-      body: JSON.stringify({ content, image, parentId }),
+      body: JSON.stringify({ content, image, parent_id }),
     });
-    return response;
+    return data;
   },
 
-  // 获取帖子列表
   getPosts: async (
-    limit: number = 10,
+    limit: number = 20,
     offset: number = 0,
     type: string = "FOR_YOU",
   ) => {
-    const response = await request<{ posts: Post[]; total: number }>(
+    const data = await request<{ items: Post[]; total: number }>(
       `/post?limit=${limit}&offset=${offset}&type=${type}`,
     );
-    return response;
+    return data;
   },
 
-  // 搜索帖子
   searchPosts: async (q: string) => {
-    const response = await request<{ posts: Post[] }>(
+    const data = await request<{ items: Post[]; total: number }>(
       `/post/search?q=${encodeURIComponent(q)}`,
     );
-    return response.posts;
+    return data.items;
   },
 
-  // 点赞/取消点赞
   likePost: async (id: string) => {
-    const response = await request<{ liked: boolean }>(`/post/${id}/like`, {
+    const data = await request<{ liked: boolean }>(`/post/${id}/likes`, {
       method: "POST",
       body: JSON.stringify({}),
     });
-    return response;
+    return data;
   },
 
-  // 转发/取消转发
-  repostPost: async (id: string) => {
-    const response = await request<{ reposted: boolean }>(
-      `/post/${id}/repost`,
-      {
-        method: "POST",
-        body: JSON.stringify({}),
-      },
-    );
-    return response;
-  },
-
-  // 获取单个帖子
-  getPost: async (id: string) => {
-    const response = await request<Post>(`/post/${id}`);
-    return response;
-  },
-
-  // 获取回复列表
-  getReplies: async (id: string) => {
-    const response = await request<Post[]>(`/post/${id}/replies`);
-    return response;
-  },
-};
-
-// 消息相关API
-export const messageApi = {
-  // 获取聊天列表
-  getChats: async () => {
-    const response = await request<{ chats: Chat[] }>("/message/chats");
-    return response.chats;
-  },
-
-  // 获取聊天消息
-  getMessages: async (chatId: string) => {
-    const response = await request<{ messages: Message[] }>(
-      `/message/chats/${chatId}/messages`,
-    );
-    return response.messages;
-  },
-
-  // 发送消息
-  sendMessage: async (chatId: string, text: string) => {
-    const response = await request<{ message: Message }>(
-      `/message/chats/${chatId}/messages`,
-      {
-        method: "POST",
-        body: JSON.stringify({ text }),
-      },
-    );
-    return response.message;
-  },
-
-  // 创建新聊天
-  createChat: async (participantId: string) => {
-    const response = await request<{ chat: Chat }>("/message/chats", {
-      method: "POST",
-      body: JSON.stringify({ participantId }),
+  unlikePost: async (id: string) => {
+    await request<void>(`/post/${id}/likes`, {
+      method: "DELETE",
     });
-    return response.chat;
+  },
+
+  repostPost: async (id: string) => {
+    const data = await request<{ reposted: boolean }>(`/post/${id}/reposts`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    return data;
+  },
+
+  unrepostPost: async (id: string) => {
+    await request<void>(`/post/${id}/reposts`, {
+      method: "DELETE",
+    });
+  },
+
+  getPost: async (id: string) => {
+    const data = await request<Post>(`/post/${id}`);
+    return data;
+  },
+
+  getReplies: async (id: string) => {
+    const data = await request<{ items: Post[]; total: number }>(
+      `/post/${id}/replies`,
+    );
+    return data.items;
+  },
+
+  deletePost: async (id: string) => {
+    await request<void>(`/post/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
-// 通知相关API
-export const notificationApi = {
-  // 获取通知列表
-  getNotifications: async () => {
-    const response = await request<Notification[]>("/notification");
-    return response;
+export const messageApi = {
+  getChats: async () => {
+    const data = await request<{ items: Chat[]; total: number }>(
+      "/message/chats",
+    );
+    return data.items;
   },
 
-  // 标记所有通知为已读
+  getMessages: async (chatId: string, limit: number = 50, before?: string) => {
+    let url = `/message/chats/${chatId}/messages?limit=${limit}`;
+    if (before) {
+      url += `&before=${encodeURIComponent(before)}`;
+    }
+    const data = await request<{ items: Message[]; total: number }>(url);
+    return data.items;
+  },
+
+  sendMessage: async (chatId: string, content: string) => {
+    const data = await request<Message>(`/message/chats/${chatId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    return data;
+  },
+
+  createChat: async (recipient_id: string) => {
+    const data = await request<{ id: string }>("/message/chats", {
+      method: "POST",
+      body: JSON.stringify({ recipient_id }),
+    });
+    return data;
+  },
+};
+
+export const notificationApi = {
+  getNotifications: async (limit: number = 20, offset: number = 0) => {
+    const data = await request<{
+      items: Notification[];
+      total: number;
+      unread_count: number;
+    }>(`/notification?limit=${limit}&offset=${offset}`);
+    return data;
+  },
+
   markAllAsRead: async () => {
-    const response = await request<{ success: boolean }>(
-      "/notification/read-all",
+    const data = await request<{ success: boolean }>("/notification/read-all", {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    });
+    return data;
+  },
+
+  markAsRead: async (id: string) => {
+    const data = await request<{ success: boolean }>(
+      `/notification/${id}/read`,
       {
-        method: "POST",
+        method: "PATCH",
         body: JSON.stringify({}),
       },
     );
-    return response;
+    return data;
+  },
+
+  deleteNotification: async (id: string) => {
+    await request<void>(`/notification/${id}`, {
+      method: "DELETE",
+    });
   },
 };
