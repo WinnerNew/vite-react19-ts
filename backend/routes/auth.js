@@ -1,10 +1,18 @@
 const bcrypt = require("bcryptjs");
 const db = require("../db");
+const {
+  formatUser,
+  success,
+  created,
+  error,
+  conflict,
+  unauthorized,
+  notFound,
+} = require("../utils");
 
 const authRoutes = async (fastify, options) => {
-  // 注册路由
   fastify.post(
-    "/register",
+    "/users",
     {
       schema: {
         description: "Register a new user",
@@ -13,132 +21,51 @@ const authRoutes = async (fastify, options) => {
           type: "object",
           required: ["username", "handle", "password", "avatar"],
           properties: {
-            username: {
-              type: "string",
-              description: "Username of the user",
-            },
+            username: { type: "string", description: "Username of the user" },
             handle: {
               type: "string",
               description: "Handle of the user (like @username)",
             },
-            password: {
-              type: "string",
-              description: "Password of the user",
-            },
-            avatar: {
-              type: "string",
-              description: "Avatar URL of the user",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              user: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  username: {
-                    type: "string",
-                  },
-                  handle: {
-                    type: "string",
-                  },
-                  avatar: {
-                    type: "string",
-                  },
-                  bio: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  location: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  website: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  followers: {
-                    type: "integer",
-                  },
-                  following: {
-                    type: "integer",
-                  },
-                  createdAt: {
-                    type: "string",
-                    format: "date-time",
-                  },
-                },
-              },
-              token: {
-                type: "string",
-              },
-            },
+            password: { type: "string", description: "Password of the user" },
+            avatar: { type: "string", description: "Avatar URL of the user" },
           },
         },
       },
     },
     async (request, reply) => {
       const { username, handle, password, avatar } = request.body;
-      console.log(username, handle, password, avatar);
+
       try {
-        // 检查用户是否已存在
-        // 检查用户名是否已存在
         const existingUserByUsername = await db.user.findUnique({
           where: { username },
         });
         if (existingUserByUsername) {
-          return reply.code(400).send({ msg: "用户名已存在" });
+          return conflict(reply, "用户名已存在");
         }
 
-        // 检查 handle 是否已存在
         const existingUserByHandle = await db.user.findUnique({
           where: { handle },
         });
         if (existingUserByHandle) {
-          return reply.code(400).send({ msg: "Handle 已存在" });
+          return conflict(reply, "Handle已存在");
         }
 
-        // 哈希密码
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // 创建用户
         const user = await db.user.create({
-          data: {
-            username,
-            handle,
-            password: hashedPassword,
-            avatar,
-          },
+          data: { username, handle, password: hashedPassword, avatar },
         });
 
-        // 过滤掉密码字段
-        const { password: _, ...userWithoutPassword } = user;
-
-        // 生成JWT token
         const token = fastify.jwt.sign({ userId: user.id });
-
-        return reply.send({
-          user: {
-            ...userWithoutPassword,
-            createdAt: user.createdAt.toISOString(),
-          },
-          token,
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return created(reply, { user: formatUser(user), token }, "注册成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
       }
     },
   );
 
-  // 登录路由
   fastify.post(
-    "/login",
+    "/auth/login",
     {
       schema: {
         description: "Login a user",
@@ -151,59 +78,7 @@ const authRoutes = async (fastify, options) => {
               type: "string",
               description: "Handle of the user (like @username)",
             },
-            password: {
-              type: "string",
-              description: "Password of the user",
-            },
-          },
-        },
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              user: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  username: {
-                    type: "string",
-                  },
-                  handle: {
-                    type: "string",
-                  },
-                  avatar: {
-                    type: "string",
-                  },
-                  bio: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  location: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  website: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  followers: {
-                    type: "integer",
-                  },
-                  following: {
-                    type: "integer",
-                  },
-                  createdAt: {
-                    type: "string",
-                    format: "date-time",
-                  },
-                },
-              },
-              token: {
-                type: "string",
-              },
-            },
+            password: { type: "string", description: "Password of the user" },
           },
         },
       },
@@ -212,131 +87,119 @@ const authRoutes = async (fastify, options) => {
       const { handle, password } = request.body;
 
       try {
-        // 查找用户
-        const user = await db.user.findUnique({
-          where: { handle },
-        });
-
+        const user = await db.user.findUnique({ where: { handle } });
         if (!user) {
-          return reply.code(401).send({ msg: "用户不存在" });
+          return unauthorized(reply, "用户名或密码错误");
         }
 
-        // 验证密码
         const isValidPassword = await bcrypt.compare(password, user.password);
-
         if (!isValidPassword) {
-          return reply.code(401).send({ msg: "密码错误" });
+          return unauthorized(reply, "用户名或密码错误");
         }
 
-        // 生成JWT token
         const token = fastify.jwt.sign({ userId: user.id });
-
-        // 返回用户信息（不包含密码）
-        const { password: _, ...userWithoutPassword } = user;
-
-        return reply.send({
-          user: {
-            ...userWithoutPassword,
-            createdAt: user.createdAt.toISOString(),
-          },
-          token,
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return success(reply, { user: formatUser(user), token }, "登录成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
       }
     },
   );
 
-  // 验证token路由
   fastify.get(
-    "/me",
+    "/users/me",
     {
       schema: {
         description: "Get current user information",
         tags: ["auth"],
-        security: [
-          {
-            bearerAuth: [],
-          },
-        ],
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              user: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                  },
-                  username: {
-                    type: "string",
-                  },
-                  handle: {
-                    type: "string",
-                  },
-                  avatar: {
-                    type: "string",
-                  },
-                  bio: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  location: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  website: {
-                    type: "string",
-                    nullable: true,
-                  },
-                  followers: {
-                    type: "integer",
-                  },
-                  following: {
-                    type: "integer",
-                  },
-                  createdAt: {
-                    type: "string",
-                    format: "date-time",
-                  },
-                },
-              },
-            },
-          },
-        },
+        security: [{ bearerAuth: [] }],
       },
     },
     async (request, reply) => {
       try {
-        // 验证JWT token
         const { userId } = await request.jwtVerify();
-
-        // 查找用户
-        const user = await db.user.findUnique({
-          where: { id: userId },
-        });
+        const user = await db.user.findUnique({ where: { id: userId } });
 
         if (!user) {
-          return reply.code(404).send({ msg: "用户未找到" });
+          return notFound(reply, "用户不存在");
         }
 
-        // 过滤掉密码字段
-        const { password: _, ...userWithoutPassword } = user;
-
-        return reply.send({
-          user: {
-            ...userWithoutPassword,
-            createdAt: user.createdAt.toISOString(),
-          },
-        });
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(401).send({ msg: "未授权" });
+        return success(reply, { user: formatUser(user) });
+      } catch (err) {
+        fastify.log.error(err);
+        return unauthorized(reply);
       }
     },
   );
+
+  fastify.post("/register", async (request, reply) => {
+    const { username, handle, password, avatar } = request.body;
+
+    try {
+      const existingUserByUsername = await db.user.findUnique({
+        where: { username },
+      });
+      if (existingUserByUsername) {
+        return conflict(reply, "用户名已存在");
+      }
+
+      const existingUserByHandle = await db.user.findUnique({
+        where: { handle },
+      });
+      if (existingUserByHandle) {
+        return conflict(reply, "Handle已存在");
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await db.user.create({
+        data: { username, handle, password: hashedPassword, avatar },
+      });
+
+      const token = fastify.jwt.sign({ userId: user.id });
+      return created(reply, { user: formatUser(user), token }, "注册成功");
+    } catch (err) {
+      fastify.log.error(err);
+      return error(reply, "服务器内部错误");
+    }
+  });
+
+  fastify.post("/login", async (request, reply) => {
+    const { handle, password } = request.body;
+
+    try {
+      const user = await db.user.findUnique({ where: { handle } });
+      if (!user) {
+        return unauthorized(reply, "用户名或密码错误");
+      }
+
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return unauthorized(reply, "用户名或密码错误");
+      }
+
+      const token = fastify.jwt.sign({ userId: user.id });
+      return success(reply, { user: formatUser(user), token }, "登录成功");
+    } catch (err) {
+      fastify.log.error(err);
+      return error(reply, "服务器内部错误");
+    }
+  });
+
+  fastify.get("/me", async (request, reply) => {
+    try {
+      const { userId } = await request.jwtVerify();
+      const user = await db.user.findUnique({ where: { id: userId } });
+
+      if (!user) {
+        return notFound(reply, "用户不存在");
+      }
+
+      return success(reply, { user: formatUser(user) });
+    } catch (err) {
+      fastify.log.error(err);
+      return unauthorized(reply);
+    }
+  });
 };
 
 module.exports = authRoutes;

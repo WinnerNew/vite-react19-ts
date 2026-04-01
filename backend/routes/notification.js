@@ -1,48 +1,94 @@
 const db = require("../db");
+const {
+  formatNotification,
+  success,
+  error,
+  notFound,
+  noContent,
+  paginated,
+} = require("../utils");
 
 const notificationRoutes = async (fastify, options) => {
-  // 获取通知列表
   fastify.get(
     "/",
     {
       schema: {
-        description: "Get notifications for current user",
+        description: "Get user notifications",
         tags: ["notification"],
         security: [{ bearerAuth: [] }],
+        querystring: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", default: 20 },
+            offset: { type: "integer", default: 0 },
+          },
+        },
       },
     },
     async (request, reply) => {
       try {
         const { userId } = await request.jwtVerify();
+        const { limit = 20, offset = 0 } = request.query;
 
         const notifications = await db.notification.findMany({
           where: { recipientId: userId },
           orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset,
           include: {
             actor: {
-              select: {
-                id: true,
-                username: true,
-                handle: true,
-                avatar: true,
+              select: { id: true, username: true, handle: true, avatar: true },
+            },
+            post: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    handle: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+            message: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    handle: true,
+                    avatar: true,
+                  },
+                },
               },
             },
           },
         });
 
-        return notifications.map(n => ({
-          ...n,
-          time: formatTimestamp(n.createdAt)
-        }));
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        const formattedNotifications = notifications.map((n) =>
+          formatNotification(n, userId),
+        );
+        const total = await db.notification.count({
+          where: { recipientId: userId },
+        });
+        const unreadCount = await db.notification.count({
+          where: { recipientId: userId, read: false },
+        });
+
+        return success(reply, {
+          items: formattedNotifications,
+          total,
+          unread_count: unreadCount,
+        });
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "获取通知失败");
       }
-    }
+    },
   );
 
-  // 标记所有通知为已读
-  fastify.post(
+  fastify.patch(
     "/read-all",
     {
       schema: {
@@ -56,26 +102,101 @@ const notificationRoutes = async (fastify, options) => {
         const { userId } = await request.jwtVerify();
 
         await db.notification.updateMany({
-          where: { recipientId: userId, isRead: false },
-          data: { isRead: true },
+          where: { recipientId: userId, read: false },
+          data: { read: true },
         });
 
-        return { success: true };
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return success(reply, { success: true }, "标记已读成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "标记已读失败");
       }
-    }
+    },
   );
-};
 
-function formatTimestamp(date) {
-  const now = new Date();
-  const diff = (now - new Date(date)) / 1000;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return new Date(date).toLocaleDateString();
-}
+  fastify.patch(
+    "/:id/read",
+    {
+      schema: {
+        description: "Mark a notification as read",
+        tags: ["notification"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { userId } = await request.jwtVerify();
+        const { id } = request.params;
+
+        const notification = await db.notification.findFirst({
+          where: { id, recipientId: userId },
+        });
+
+        if (!notification) {
+          return notFound(reply, "通知不存在");
+        }
+
+        await db.notification.update({
+          where: { id },
+          data: { read: true },
+        });
+
+        return success(reply, { success: true }, "标记已读成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "标记已读失败", "MARK_READ_FAILED");
+      }
+    },
+  );
+
+  fastify.delete(
+    "/:id",
+    {
+      schema: {
+        description: "Delete a notification",
+        tags: ["notification"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { userId } = await request.jwtVerify();
+        const { id } = request.params;
+
+        const notification = await db.notification.findFirst({
+          where: { id, recipientId: userId },
+        });
+
+        if (!notification) {
+          return notFound(reply, "通知不存在", "NOTIFICATION_NOT_FOUND");
+        }
+
+        await db.notification.delete({ where: { id } });
+        return noContent(reply);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "删除通知失败");
+      }
+    },
+  );
+
+  fastify.post("/read-all", async (request, reply) => {
+    try {
+      const { userId } = await request.jwtVerify();
+
+      await db.notification.updateMany({
+        where: { recipientId: userId, read: false },
+        data: { read: true },
+      });
+
+      return success(reply, { success: true }, "标记已读成功");
+    } catch (err) {
+      fastify.log.error(err);
+      return error(reply, "标记已读失败", "MARK_READ_FAILED");
+    }
+  });
+};
 
 module.exports = notificationRoutes;

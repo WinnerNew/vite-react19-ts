@@ -1,7 +1,19 @@
 const db = require("../db");
+const {
+  formatPost,
+  optionalAuth,
+  success,
+  created,
+  createdWithId,
+  noContent,
+  error,
+  notFound,
+  conflict,
+  forbidden,
+  paginated,
+} = require("../utils");
 
 const postRoutes = async (fastify, options) => {
-  // 创建帖子或回复
   fastify.post(
     "/",
     {
@@ -15,7 +27,7 @@ const postRoutes = async (fastify, options) => {
           properties: {
             content: { type: "string" },
             image: { type: "string", nullable: true },
-            parentId: { type: "string", nullable: true },
+            parent_id: { type: "string", nullable: true },
           },
         },
       },
@@ -23,25 +35,18 @@ const postRoutes = async (fastify, options) => {
     async (request, reply) => {
       try {
         const { userId } = await request.jwtVerify();
-        const { content, image, parentId } = request.body;
+        const { content, image, parent_id } = request.body;
 
         const post = await db.post.create({
-          data: {
-            content,
-            image,
-            userId,
-            parentId,
-          },
+          data: { content, image, userId, parentId: parent_id },
         });
 
-        // 如果是回复，更新父帖子的回复计数并创建通知
-        if (parentId) {
+        if (parent_id) {
           const parentPost = await db.post.update({
-            where: { id: parentId },
+            where: { id: parent_id },
             data: { repliesCount: { increment: 1 } },
           });
 
-          // 创建通知
           if (parentPost.userId !== userId) {
             await db.notification.create({
               data: {
@@ -54,33 +59,14 @@ const postRoutes = async (fastify, options) => {
           }
         }
 
-        const user = await db.user.findUnique({ where: { id: userId } });
-        return {
-          ...post,
-          author: {
-            id: user.id,
-            username: user.username,
-            handle: user.handle,
-            avatar: user.avatar,
-          },
-          timestamp: "刚刚",
-          likesCount: 0,
-          repostsCount: 0,
-          repliesCount: 0,
-          isLiked: false,
-          isReposted: false,
-        };
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({
-          msg: "服务器内部错误",
-          error: error.message,
-        });
+        return createdWithId(reply, post.id, "发布成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
       }
     },
   );
 
-  // 搜索帖子
   fastify.get(
     "/search",
     {
@@ -91,28 +77,22 @@ const postRoutes = async (fastify, options) => {
           type: "object",
           properties: {
             q: { type: "string" },
+            limit: { type: "integer", default: 20 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { q } = request.query;
-      if (!q) return { posts: [] };
+      const { q, limit = 20 } = request.query;
+      if (!q) return success(reply, { items: [], total: 0 });
 
-      let userId = null;
-      try {
-        const decoded = await request.jwtVerify();
-        userId = decoded.userId;
-      } catch (e) {}
+      const userId = await optionalAuth(request);
 
       try {
         const posts = await db.post.findMany({
-          where: {
-            content: { contains: q },
-            parentId: null, // 仅搜索顶层帖子
-          },
+          where: { content: { contains: q }, parentId: null },
           orderBy: { createdAt: "desc" },
-          take: 20,
+          take: limit,
           include: {
             user: true,
             likes: userId ? { where: { userId } } : false,
@@ -120,28 +100,15 @@ const postRoutes = async (fastify, options) => {
           },
         });
 
-        const formattedPosts = posts.map((post) => ({
-          ...post,
-          author: {
-            id: post.user.id,
-            username: post.user.username,
-            handle: post.user.handle,
-            avatar: post.user.avatar,
-          },
-          timestamp: formatTimestamp(post.createdAt),
-          isLiked: userId ? post.likes?.length > 0 : false,
-          isReposted: userId ? post.reposts?.length > 0 : false,
-        }));
-
-        return { posts: formattedPosts };
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "搜索失败" });
+        const formattedPosts = posts.map((post) => formatPost(post, userId));
+        return paginated(reply, formattedPosts, formattedPosts.length);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "搜索失败");
       }
     },
   );
 
-  // 获取帖子列表 (带点赞/转发状态)
   fastify.get(
     "/",
     {
@@ -160,23 +127,18 @@ const postRoutes = async (fastify, options) => {
     },
     async (request, reply) => {
       const { limit, offset, type } = request.query;
-      let userId = null;
-      try {
-        const decoded = await request.jwtVerify();
-        userId = decoded.userId;
-      } catch (e) {}
+      const userId = await optionalAuth(request);
 
       try {
         const where = { parentId: null };
 
-        // 如果是关注列表，筛选关注的人
         if (type === "FOLLOWING" && userId) {
           const following = await db.follow.findMany({
             where: { followerId: userId },
             select: { followingId: true },
           });
           const followingIds = following.map((f) => f.followingId);
-          where.userId = { in: [...followingIds, userId] }; // 包含自己
+          where.userId = { in: [...followingIds, userId] };
         }
 
         const posts = await db.post.findMany({
@@ -188,53 +150,325 @@ const postRoutes = async (fastify, options) => {
             user: true,
             likes: userId ? { where: { userId } } : false,
             reposts: userId ? { where: { userId } } : false,
-            parent: {
-              include: {
-                user: true,
-              },
-            },
+            parent: { include: { user: true } },
           },
         });
 
-        const formattedPosts = posts.map((post) => {
-          const formatted = {
-            ...post,
-            author: {
-              id: post.user.id,
-              username: post.user.username,
-              handle: post.user.handle,
-              avatar: post.user.avatar,
+        const formattedPosts = posts.map((post) => formatPost(post, userId));
+        const total = await db.post.count({ where });
+
+        return paginated(reply, formattedPosts, total);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
+      }
+    },
+  );
+
+  fastify.post(
+    "/:id/likes",
+    {
+      schema: {
+        description: "Like a post",
+        tags: ["post"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = await request.jwtVerify();
+      const postId = request.params.id;
+
+      try {
+        const existingLike = await db.like.findUnique({
+          where: { userId_postId: { userId, postId } },
+        });
+
+        if (existingLike) {
+          return conflict(reply, "已经点赞过");
+        }
+
+        await db.like.create({ data: { userId, postId } });
+        const post = await db.post.update({
+          where: { id: postId },
+          data: { likesCount: { increment: 1 } },
+        });
+
+        if (post.userId !== userId) {
+          await db.notification.create({
+            data: {
+              type: "LIKE",
+              postId: post.id,
+              actorId: userId,
+              recipientId: post.userId,
             },
-            timestamp: formatTimestamp(post.createdAt),
-            isLiked: userId ? post.likes?.length > 0 : false,
-            isReposted: userId ? post.reposts?.length > 0 : false,
-          };
-          if (post.parent) {
-            formatted.parentPost = {
-              ...post.parent,
+          });
+        }
+
+        return success(reply, { liked: true }, "点赞成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "操作失败");
+      }
+    },
+  );
+
+  fastify.delete(
+    "/:id/likes",
+    {
+      schema: {
+        description: "Unlike a post",
+        tags: ["post"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = await request.jwtVerify();
+      const postId = request.params.id;
+
+      try {
+        const existingLike = await db.like.findUnique({
+          where: { userId_postId: { userId, postId } },
+        });
+
+        if (!existingLike) {
+          return notFound(reply, "点赞记录不存在");
+        }
+
+        await db.like.delete({ where: { id: existingLike.id } });
+        await db.post.update({
+          where: { id: postId },
+          data: { likesCount: { decrement: 1 } },
+        });
+
+        return noContent(reply);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "操作失败", "OPERATION_FAILED");
+      }
+    },
+  );
+
+  fastify.post(
+    "/:id/reposts",
+    {
+      schema: {
+        description: "Repost a post",
+        tags: ["post"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = await request.jwtVerify();
+      const postId = request.params.id;
+
+      try {
+        const existingRepost = await db.repost.findUnique({
+          where: { userId_postId: { userId, postId } },
+        });
+
+        if (existingRepost) {
+          return conflict(reply, "已经转发过");
+        }
+
+        await db.repost.create({ data: { userId, postId } });
+        const post = await db.post.update({
+          where: { id: postId },
+          data: { repostsCount: { increment: 1 } },
+        });
+
+        if (post.userId !== userId) {
+          await db.notification.create({
+            data: {
+              type: "REPOST",
+              postId: post.id,
+              actorId: userId,
+              recipientId: post.userId,
+            },
+          });
+        }
+
+        return success(reply, { reposted: true }, "转发成功");
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "操作失败", "OPERATION_FAILED");
+      }
+    },
+  );
+
+  fastify.delete(
+    "/:id/reposts",
+    {
+      schema: {
+        description: "Unrepost a post",
+        tags: ["post"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const { userId } = await request.jwtVerify();
+      const postId = request.params.id;
+
+      try {
+        const existingRepost = await db.repost.findUnique({
+          where: { userId_postId: { userId, postId } },
+        });
+
+        if (!existingRepost) {
+          return notFound(reply, "转发记录不存在");
+        }
+
+        await db.repost.delete({ where: { id: existingRepost.id } });
+        await db.post.update({
+          where: { id: postId },
+          data: { repostsCount: { decrement: 1 } },
+        });
+
+        return noContent(reply);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "操作失败", "OPERATION_FAILED");
+      }
+    },
+  );
+
+  fastify.get(
+    "/:id/replies",
+    {
+      schema: {
+        description: "Get post replies",
+        tags: ["post"],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const postId = request.params.id;
+      const userId = await optionalAuth(request);
+
+      try {
+        const parentPost = await db.post.findUnique({
+          where: { id: postId },
+          include: { user: true },
+        });
+
+        const replies = await db.post.findMany({
+          where: { parentId: postId },
+          orderBy: { createdAt: "asc" },
+          include: {
+            user: true,
+            likes: userId ? { where: { userId } } : false,
+            reposts: userId ? { where: { userId } } : false,
+          },
+        });
+
+        const formattedReplies = replies.map((r) => {
+          const formatted = formatPost(r, userId);
+          if (parentPost) {
+            formatted.parent_post = {
+              ...parentPost,
               author: {
-                id: post.parent.user.id,
-                username: post.parent.user.username,
-                handle: post.parent.user.handle,
-                avatar: post.parent.user.avatar,
+                id: parentPost.user.id,
+                username: parentPost.user.username,
+                handle: parentPost.user.handle,
+                avatar: parentPost.user.avatar,
               },
             };
           }
           return formatted;
         });
 
-        return {
-          posts: formattedPosts,
-          total: await db.post.count({ where }),
-        };
-      } catch (error) {
-        fastify.log.error(error);
-        return reply.code(500).send({ msg: "服务器内部错误" });
+        return paginated(reply, formattedReplies, formattedReplies.length);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "获取回复失败");
       }
     },
   );
 
-  // 点赞/取消点赞
+  fastify.get(
+    "/:id",
+    {
+      schema: {
+        description: "Get a single post by ID",
+        tags: ["post"],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      const postId = request.params.id;
+      const userId = await optionalAuth(request);
+
+      try {
+        const post = await db.post.findUnique({
+          where: { id: postId },
+          include: {
+            user: true,
+            likes: userId ? { where: { userId } } : false,
+            reposts: userId ? { where: { userId } } : false,
+            parent: {
+              include: {
+                user: true,
+                likes: userId ? { where: { userId } } : false,
+                reposts: userId ? { where: { userId } } : false,
+              },
+            },
+          },
+        });
+
+        if (!post) {
+          return notFound(reply, "帖子不存在");
+        }
+
+        const response = formatPost(post, userId);
+        if (post.parent) {
+          response.parent_post = formatPost(post.parent, userId);
+        }
+
+        return success(reply, response);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
+      }
+    },
+  );
+
+  fastify.delete(
+    "/:id",
+    {
+      schema: {
+        description: "Delete a post",
+        tags: ["post"],
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", properties: { id: { type: "string" } } },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { userId } = await request.jwtVerify();
+        const postId = request.params.id;
+
+        const post = await db.post.findUnique({ where: { id: postId } });
+
+        if (!post) {
+          return notFound(reply, "帖子不存在", "POST_NOT_FOUND");
+        }
+
+        if (post.userId !== userId) {
+          return forbidden(reply, "无权删除此帖子");
+        }
+
+        await db.post.delete({ where: { id: postId } });
+        return noContent(reply);
+      } catch (err) {
+        fastify.log.error(err);
+        return error(reply, "服务器内部错误");
+      }
+    },
+  );
+
   fastify.post("/:id/like", async (request, reply) => {
     const { userId } = await request.jwtVerify();
     const postId = request.params.id;
@@ -250,7 +484,7 @@ const postRoutes = async (fastify, options) => {
           where: { id: postId },
           data: { likesCount: { decrement: 1 } },
         });
-        return { liked: false };
+        return success(reply, { liked: false }, "取消点赞成功");
       } else {
         await db.like.create({ data: { userId, postId } });
         const post = await db.post.update({
@@ -258,7 +492,6 @@ const postRoutes = async (fastify, options) => {
           data: { likesCount: { increment: 1 } },
         });
 
-        // 创建通知
         if (post.userId !== userId) {
           await db.notification.create({
             data: {
@@ -269,14 +502,13 @@ const postRoutes = async (fastify, options) => {
             },
           });
         }
-        return { liked: true };
+        return success(reply, { liked: true }, "点赞成功");
       }
-    } catch (error) {
-      return reply.code(500).send({ msg: "操作失败" });
+    } catch (err) {
+      return error(reply, "操作失败", "OPERATION_FAILED");
     }
   });
 
-  // 转发/取消转发
   fastify.post("/:id/repost", async (request, reply) => {
     const { userId } = await request.jwtVerify();
     const postId = request.params.id;
@@ -292,7 +524,7 @@ const postRoutes = async (fastify, options) => {
           where: { id: postId },
           data: { repostsCount: { decrement: 1 } },
         });
-        return { reposted: false };
+        return success(reply, { reposted: false }, "取消转发成功");
       } else {
         await db.repost.create({ data: { userId, postId } });
         const post = await db.post.update({
@@ -300,7 +532,6 @@ const postRoutes = async (fastify, options) => {
           data: { repostsCount: { increment: 1 } },
         });
 
-        // 创建通知
         if (post.userId !== userId) {
           await db.notification.create({
             data: {
@@ -311,133 +542,12 @@ const postRoutes = async (fastify, options) => {
             },
           });
         }
-        return { reposted: true };
+        return success(reply, { reposted: true }, "转发成功");
       }
-    } catch (error) {
-      return reply.code(500).send({ msg: "操作失败" });
-    }
-  });
-
-  // 获取帖子回复
-  fastify.get("/:id/replies", async (request, reply) => {
-    const postId = request.params.id;
-    let userId = null;
-    try {
-      const decoded = await request.jwtVerify();
-      userId = decoded.userId;
-    } catch (e) {}
-
-    try {
-      const parentPost = await db.post.findUnique({
-        where: { id: postId },
-        include: { user: true },
-      });
-
-      const replies = await db.post.findMany({
-        where: { parentId: postId },
-        orderBy: { createdAt: "asc" },
-        include: {
-          user: true,
-          likes: userId ? { where: { userId } } : false,
-          reposts: userId ? { where: { userId } } : false,
-        },
-      });
-
-      return replies.map((r) => {
-        const formatted = {
-          ...r,
-          author: {
-            id: r.user.id,
-            username: r.user.username,
-            handle: r.user.handle,
-            avatar: r.user.avatar,
-          },
-          timestamp: formatTimestamp(r.createdAt),
-          isLiked: userId ? r.likes?.length > 0 : false,
-          isReposted: userId ? r.reposts?.length > 0 : false,
-        };
-        if (parentPost) {
-          formatted.parentPost = {
-            ...parentPost,
-            author: {
-              id: parentPost.user.id,
-              username: parentPost.user.username,
-              handle: parentPost.user.handle,
-              avatar: parentPost.user.avatar,
-            },
-          };
-        }
-        return formatted;
-      });
-    } catch (error) {
-      return reply.code(500).send({ msg: "获取失败" });
-    }
-  });
-
-  // 获取单个帖子详情
-  fastify.get("/:id", async (request, reply) => {
-    const postId = request.params.id;
-    let userId = null;
-    try {
-      const decoded = await request.jwtVerify();
-      userId = decoded.userId;
-    } catch (e) {}
-
-    try {
-      const post = await db.post.findUnique({
-        where: { id: postId },
-        include: {
-          user: true,
-          likes: userId ? { where: { userId } } : false,
-          reposts: userId ? { where: { userId } } : false,
-          parent: {
-            include: {
-              user: true,
-              likes: userId ? { where: { userId } } : false,
-              reposts: userId ? { where: { userId } } : false,
-            },
-          },
-        },
-      });
-
-      if (!post) {
-        return reply.code(404).send({ msg: "帖子未找到" });
-      }
-
-      const formatSinglePost = (p) => ({
-        ...p,
-        author: {
-          id: p.user.id,
-          username: p.user.username,
-          handle: p.user.handle,
-          avatar: p.user.avatar,
-        },
-        timestamp: formatTimestamp(p.createdAt),
-        fullTimestamp: new Date(p.createdAt).toLocaleString(),
-        isLiked: userId ? p.likes?.length > 0 : false,
-        isReposted: userId ? p.reposts?.length > 0 : false,
-      });
-
-      const response = formatSinglePost(post);
-      if (post.parent) {
-        response.parentPost = formatSinglePost(post.parent);
-      }
-
-      return response;
-    } catch (error) {
-      fastify.log.error(error);
-      return reply.code(500).send({ msg: "服务器内部错误" });
+    } catch (err) {
+      return error(reply, "操作失败", "OPERATION_FAILED");
     }
   });
 };
-
-function formatTimestamp(date) {
-  const now = new Date();
-  const diff = (now - new Date(date)) / 1000;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
-  return new Date(date).toLocaleDateString();
-}
 
 module.exports = postRoutes;
