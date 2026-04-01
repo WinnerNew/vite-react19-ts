@@ -40,15 +40,19 @@ model User {
 
 model Notification {
   id          String   @id @default(cuid())
-  type        String   // "LIKE", "REPOST", "REPLY", "FOLLOW"
+  type        String   // "LIKE", "REPOST", "REPLY", "FOLLOW", "MESSAGE"
   postId      String?  // 相关的帖子ID
+  messageId   String?  // 相关的消息ID
   actorId     String   // 触发动作的用户ID
   recipientId String   // 接收通知的用户ID
-  isRead      Boolean  @default(false)
+  read        Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   actor     User @relation("actor", fields: [actorId], references: [id])
   recipient User @relation("recipient", fields: [recipientId], references: [id])
+  
+  post    Post?    @relation(fields: [postId], references: [id])
+  message Message? @relation(fields: [messageId], references: [id])
 
   @@index([recipientId])
   @@index([actorId])
@@ -70,6 +74,7 @@ model Post {
   // 关联字段
   likes     Like[]
   reposts   Repost[]
+  notifications Notification[]
   
   // 评论/回复逻辑
   parentId  String?
@@ -118,13 +123,15 @@ model Follow {
 
 model Message {
   id        String   @id @default(cuid())
-  text      String
+  content   String   @db.Text
   createdAt DateTime @default(now())
   
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
-  chatId    String
-  chat      Chat     @relation(fields: [chatId], references: [id])
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  chatId  String
+  chat    Chat     @relation(fields: [chatId], references: [id])
+  
+  notifications Notification[]
 
   @@map("messages")
 }
