@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { userApi } from "../services/api";
+import { userApi } from "../services";
 import { User } from "../types";
+import { Avatar } from "../components/Avatar";
+import { LoadingSpinner } from "../components/Loading";
 
 interface FollowListViewProps {
   currentUser: User;
@@ -114,7 +116,7 @@ const FollowListView: React.FC<FollowListViewProps> = ({ currentUser }) => {
       <div className="flex-1">
         {isLoading ? (
           <div className="flex justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+            <LoadingSpinner size={32} />
           </div>
         ) : users.length > 0 ? (
           <div className="flex flex-col">
@@ -125,11 +127,7 @@ const FollowListView: React.FC<FollowListViewProps> = ({ currentUser }) => {
                 className="flex items-center justify-between p-4 hover:bg-zinc-900/50 cursor-pointer transition-colors border-b border-zinc-900"
               >
                 <div className="flex gap-3 min-w-0">
-                  <img
-                    src={user.avatar}
-                    className="w-10 h-10 rounded-full object-cover border border-zinc-800"
-                    alt={user.username}
-                  />
+                  <Avatar src={user.avatar} size="sm" />
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold text-[15px] truncate hover:underline">
                       {user.username}

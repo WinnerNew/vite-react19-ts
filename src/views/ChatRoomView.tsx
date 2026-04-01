@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Info, Image, Gift, Send, Loader2 } from "lucide-react";
-import { messageApi } from "../services/api";
+import { ArrowLeft, Info, Image, Gift, Send } from "lucide-react";
+import { messageApi } from "../services";
 import { Message, Chat, User } from "../types";
+import { LoadingSpinner } from "../components/Loading";
+import { Avatar } from "../components/Avatar";
+import { formatRelativeTime } from "../utils/time";
 
 interface ChatRoomViewProps {
   chat: Chat;
@@ -18,23 +21,6 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState<boolean>(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-
-    if (minutes < 1) return "刚刚";
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -98,15 +84,16 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+          <LoadingSpinner size={32} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 hide-scrollbar">
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center py-20 text-center">
-              <img
+              <Avatar
                 src={chat.user.avatar}
-                className="w-16 h-16 rounded-full mx-auto mb-4 border border-zinc-800 object-cover"
+                size="lg"
+                className="mx-auto mb-4"
               />
               <h3 className="text-xl font-bold">{chat.user.username}</h3>
               <p className="text-zinc-500 text-sm">{chat.user.handle}</p>
@@ -130,7 +117,7 @@ const ChatRoomView: React.FC<ChatRoomViewProps> = ({
                   {msg.content}
                 </div>
                 <span className="text-[11px] text-zinc-500 mt-1">
-                  {formatTime(msg.created_at)}
+                  {formatRelativeTime(msg.created_at)}
                 </span>
               </div>
             ))

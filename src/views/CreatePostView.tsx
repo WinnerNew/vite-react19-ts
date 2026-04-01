@@ -1,13 +1,19 @@
 import React, { useState, useRef } from "react";
 import { X, Image, List, MapPin, Globe, Smile, Loader2 } from "lucide-react";
-import { postApi } from "../services/api";
+import { postApi } from "../services";
 import { useToast } from "../components/Toast";
+import { Avatar } from "../components/Avatar";
+import { User } from "../types";
 
 interface CreatePostViewProps {
   onBack: () => void;
+  currentUser: User;
 }
 
-const CreatePostView: React.FC<CreatePostViewProps> = ({ onBack }) => {
+const CreatePostView: React.FC<CreatePostViewProps> = ({
+  onBack,
+  currentUser,
+}) => {
   const [content, setContent] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,10 +87,7 @@ const CreatePostView: React.FC<CreatePostViewProps> = ({ onBack }) => {
       <div className="flex-1 overflow-y-auto">
         <div className="flex gap-3 px-4 pt-4">
           <div className="flex-shrink-0">
-            <img
-              src="https://picsum.photos/seed/me/200"
-              className="w-10 h-10 rounded-full object-cover border border-zinc-800"
-            />
+            <Avatar src={currentUser.avatar} size="sm" />
           </div>
           <div className="flex-1 flex flex-col min-w-0">
             <button className="self-start text-sky-500 border border-zinc-800 rounded-full px-3 py-0.5 text-[13px] font-bold hover:bg-sky-500/5 transition-colors mb-4">

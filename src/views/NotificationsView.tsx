@@ -5,11 +5,15 @@ import {
   Repeat2,
   Settings,
   MessageCircle,
-  Loader2,
+  Bell,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { notificationApi } from "../services/api";
+import { notificationApi } from "../services";
 import { Notification } from "../types";
+import { LoadingView } from "../components/Loading";
+import { Avatar } from "../components/Avatar";
+import { EmptyState } from "../components/EmptyState";
+import { formatRelativeTime } from "../utils/time";
 
 const NotificationsView: React.FC = () => {
   const navigate = useNavigate();
@@ -64,23 +68,6 @@ const NotificationsView: React.FC = () => {
     }
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-
-    if (minutes < 1) return "刚刚";
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
   const handleNotificationClick = (n: Notification) => {
     if (n.type === "FOLLOW") {
       navigate(`/profile/${n.actor.id}`);
@@ -90,11 +77,7 @@ const NotificationsView: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-black">
-        <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
-      </div>
-    );
+    return <LoadingView />;
   }
 
   return (
@@ -141,17 +124,16 @@ const NotificationsView: React.FC = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <img
+                  <Avatar
                     src={n.actor.avatar}
-                    className="w-8 h-8 rounded-full border border-zinc-800 object-cover"
-                    alt="avatar"
+                    size="xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/profile/${n.actor.id}`);
                     }}
                   />
                   <span className="text-xs text-zinc-500">
-                    {formatTime(n.created_at)}
+                    {formatRelativeTime(n.created_at)}
                   </span>
                 </div>
                 <p className="text-[15px] leading-relaxed text-zinc-100">
@@ -172,12 +154,11 @@ const NotificationsView: React.FC = () => {
             </div>
           ))
         ) : (
-          <div className="py-20 text-center flex flex-col items-center px-10">
-            <h3 className="text-2xl font-bold mb-2">No notifications yet</h3>
-            <p className="text-zinc-500 text-sm">
-              When someone interacts with you or your posts, you'll see it here.
-            </p>
-          </div>
+          <EmptyState
+            icon={Bell}
+            title="No notifications yet"
+            description="When someone interacts with you or your posts, you'll see it here."
+          />
         )}
       </div>
     </div>

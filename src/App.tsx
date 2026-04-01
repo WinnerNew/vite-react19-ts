@@ -22,7 +22,7 @@ import SettingsView from "./views/SettingsView";
 import SystemSettingsView from "./views/SystemSettingsView";
 import CreatePostView from "./views/CreatePostView";
 import EditProfileView from "./views/EditProfileView";
-import { userApi, authApi } from "./services/api";
+import { userApi, authApi } from "./services";
 import { User as UserType, Chat as ChatType } from "./types";
 import { ToastProvider } from "./components/Toast";
 
@@ -165,7 +165,9 @@ const App: React.FC = () => {
                   />
                   <Route
                     path="/register"
-                    element={currentUser ? <Navigate to="/" /> : <RegisterView />}
+                    element={
+                      currentUser ? <Navigate to="/" /> : <RegisterView />
+                    }
                   />
                   <Route
                     path="/"
@@ -330,7 +332,10 @@ const App: React.FC = () => {
                     path="/create-post"
                     element={
                       currentUser ? (
-                        <CreatePostView onBack={() => navigate("/")} />
+                        <CreatePostView
+                          onBack={() => navigate("/")}
+                          currentUser={currentUser}
+                        />
                       ) : (
                         <Navigate to="/login" />
                       )
