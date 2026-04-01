@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { authApi } from "../services/api";
+import { useToast } from "../components/Toast";
 
 const RegisterView: React.FC = () => {
   const navigate = useNavigate();
@@ -8,20 +9,20 @@ const RegisterView: React.FC = () => {
   const [handle, setHandle] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError("");
 
     try {
       const avatar = `https://picsum.photos/seed/${handle}/200`;
       await authApi.register(username, handle, password, avatar);
-      // 注册成功，跳转登录页并带上 handle
       navigate("/login", { state: { handle } });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
@@ -81,12 +82,6 @@ const RegisterView: React.FC = () => {
             placeholder="Password"
           />
         </div>
-
-        {error && (
-          <div className="bg-red-900/30 border border-red-800 rounded-lg p-3 text-red-400 text-sm">
-            {error}
-          </div>
-        )}
 
         <button
           type="submit"

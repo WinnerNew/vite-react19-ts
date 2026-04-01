@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { User } from "../types";
 import { authApi } from "../services/api";
+import { useToast } from "../components/Toast";
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -13,7 +14,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [handle, setHandle] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { showToast } = useToast();
 
   useEffect(() => {
     // 检查是否有从注册页传过来的 handle
@@ -26,14 +27,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError("");
 
     try {
       const user = await authApi.login(handle, password);
       onLogin(user);
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
@@ -80,12 +82,6 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             placeholder="Password"
           />
         </div>
-
-        {error && (
-          <div className="bg-red-900/30 border border-red-800 rounded-lg p-3 text-red-400 text-sm">
-            {error}
-          </div>
-        )}
 
         <button
           type="submit"

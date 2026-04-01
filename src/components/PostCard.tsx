@@ -24,15 +24,14 @@ const PostCard: React.FC<PostCardProps> = ({
   onReply,
 }) => {
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(post.isLiked || false);
-  const [reposted, setReposted] = useState(post.isReposted || false);
-  const [likeCount, setLikeCount] = useState(post.likesCount);
-  const [repostCount, setRepostCount] = useState(post.repostsCount);
+  const [liked, setLiked] = useState(post.is_liked || false);
+  const [reposted, setReposted] = useState(post.is_reposted || false);
+  const [likeCount, setLikeCount] = useState(post.likes_count);
+  const [repostCount, setRepostCount] = useState(post.reposts_count);
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // 乐观更新
     const newLiked = !liked;
     setLiked(newLiked);
     setLikeCount((prev) => (newLiked ? prev + 1 : prev - 1));
@@ -40,7 +39,6 @@ const PostCard: React.FC<PostCardProps> = ({
     try {
       await postApi.likePost(post.id);
     } catch (error) {
-      // 失败回滚
       setLiked(!newLiked);
       setLikeCount((prev) => (!newLiked ? prev + 1 : prev - 1));
       console.error("Failed to like:", error);
@@ -49,7 +47,6 @@ const PostCard: React.FC<PostCardProps> = ({
 
   const handleRepost = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // 乐观更新
     const newReposted = !reposted;
     setReposted(newReposted);
     setRepostCount((prev) => (newReposted ? prev + 1 : prev - 1));
@@ -57,7 +54,6 @@ const PostCard: React.FC<PostCardProps> = ({
     try {
       await postApi.repostPost(post.id);
     } catch (error) {
-      // 失败回滚
       setReposted(!newReposted);
       setRepostCount((prev) => (!newReposted ? prev + 1 : prev - 1));
       console.error("Failed to repost:", error);
@@ -69,7 +65,6 @@ const PostCard: React.FC<PostCardProps> = ({
       onClick={() => navigate(`/post/${post.id}`)}
       className="flex w-full overflow-hidden border-b border-zinc-900 bg-black p-4 transition-colors hover:bg-zinc-900/30 cursor-pointer"
     >
-      {/* Avatar Section */}
       <div
         className="flex-shrink-0 mr-3 z-10"
         onClick={(e) => {
@@ -89,7 +84,6 @@ const PostCard: React.FC<PostCardProps> = ({
         )}
       </div>
 
-      {/* Content Section */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <div className="flex min-w-0 items-center gap-1">
@@ -122,22 +116,19 @@ const PostCard: React.FC<PostCardProps> = ({
           </button>
         </div>
 
-        {/* Reply Hint */}
-        {post.parentId && post.parentPost && (
+        {post.parent_id && post.parent_post && (
           <p className="text-zinc-500 text-[14px] mb-1">
             Replying to{" "}
             <span className="text-sky-500">
-              @{post.parentPost.author.handle}
+              @{post.parent_post.author.handle}
             </span>
           </p>
         )}
 
-        {/* Text Content */}
         <p className="break-words text-[15px] leading-normal text-zinc-200">
           {post.content}
         </p>
 
-        {/* Media Section with Progressive Loading */}
         {post.image && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -150,7 +141,6 @@ const PostCard: React.FC<PostCardProps> = ({
             className="relative mt-3 w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900"
             style={{ maxHeight: "512px" }}
           >
-            {/* 骨架屏占位 */}
             {!imgLoaded && (
               <div className="absolute inset-0 bg-zinc-900 animate-pulse flex items-center justify-center">
                 <div className="w-10 h-10 border-2 border-zinc-800 rounded-full border-t-zinc-600 animate-spin" />
@@ -166,7 +156,6 @@ const PostCard: React.FC<PostCardProps> = ({
           </motion.div>
         )}
 
-        {/* Interaction Bar */}
         <div className="mt-3 flex max-w-[340px] justify-between text-zinc-500 -ml-2">
           <button
             onClick={(e) => {
@@ -178,7 +167,7 @@ const PostCard: React.FC<PostCardProps> = ({
             <div className="rounded-full p-2 transition-colors group-hover:bg-sky-500/10">
               <MessageCircle size={18} />
             </div>
-            <span className="text-[13px] font-medium">{post.repliesCount}</span>
+            <span className="text-[13px] font-medium">{post.replies_count}</span>
           </button>
 
           <button

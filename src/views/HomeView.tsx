@@ -5,6 +5,7 @@ import ReplyModal from "../components/ReplyModal";
 import { Post, User } from "../types";
 import { Loader2, Image, List, MapPin } from "lucide-react";
 import { postApi } from "../services/api";
+import { useToast } from "../components/Toast";
 
 interface HomeViewProps {
   currentUser: User;
@@ -20,6 +21,7 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
   const [hasMore, setHasMore] = useState(true);
   const [composeText, setComposeText] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const { showToast } = useToast();
 
   const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -31,7 +33,9 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
       setPosts((prev) => [newPost, ...prev]);
       setComposeText("");
     } catch (error) {
-      console.error("Failed to create post:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create post";
+      showToast(errorMessage, "error");
     } finally {
       setIsComposing(false);
     }
@@ -43,7 +47,7 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
 
     try {
       const response = await postApi.getPosts(5, offset, tab);
-      const newPosts = response.posts;
+      const newPosts = response.items;
 
       if (newPosts.length === 0) {
         setHasMore(false);
@@ -52,11 +56,13 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
         setOffset((prev) => prev + newPosts.length);
       }
     } catch (error) {
-      console.error("Error loading posts:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to load posts";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, offset, hasMore, tab]);
+  }, [isLoading, offset, hasMore, tab, showToast]);
 
   const refreshPosts = useCallback(async () => {
     setIsLoading(true);
@@ -65,15 +71,17 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
 
     try {
       const response = await postApi.getPosts(5, 0, tab);
-      setPosts(response.posts);
-      setOffset(response.posts.length);
-      setHasMore(response.posts.length > 0);
+      setPosts(response.items);
+      setOffset(response.items.length);
+      setHasMore(response.items.length > 0);
     } catch (error) {
-      console.error("Error refreshing posts:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to refresh posts";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
-  }, [tab]);
+  }, [tab, showToast]);
 
   useEffect(() => {
     refreshPosts();
@@ -196,8 +204,6 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
         post={replyPost}
         currentUser={currentUser}
         onReplySuccess={(newReply) => {
-          // 在列表中实时显示新回复（虽然首页通常只显示顶层帖子，但如果是在详情页则更有用）
-          // 这里我们可以选择刷新列表或者提示发送成功
           console.log("Reply sent:", newReply);
         }}
       />
