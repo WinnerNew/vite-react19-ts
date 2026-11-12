@@ -249,40 +249,48 @@ const userRoutes = async (fastify, options) => {
           return badRequest(reply, "不能关注自己");
         }
 
-        const existingFollow = await db.follow.findUnique({
-          where: { followerId_followingId: { followerId, followingId } },
-        });
+        const followed = await db.$transaction(async (tx) => {
+          const existingFollow = await tx.follow.findUnique({
+            where: { followerId_followingId: { followerId, followingId } },
+          });
 
-        if (existingFollow) {
-          await db.follow.delete({ where: { id: existingFollow.id } });
-          await db.user.update({
-            where: { id: followerId },
-            data: { following: { decrement: 1 } },
-          });
-          await db.user.update({
-            where: { id: followingId },
-            data: { followers: { decrement: 1 } },
-          });
-          return success(reply, { followed: false }, "取消关注成功");
-        } else {
-          await db.follow.create({ data: { followerId, followingId } });
-          await db.notification.create({
+          if (existingFollow) {
+            await tx.follow.delete({ where: { id: existingFollow.id } });
+            await tx.user.update({
+              where: { id: followerId },
+              data: { following: { decrement: 1 } },
+            });
+            await tx.user.update({
+              where: { id: followingId },
+              data: { followers: { decrement: 1 } },
+            });
+            return false;
+          }
+
+          await tx.follow.create({ data: { followerId, followingId } });
+          await tx.notification.create({
             data: {
               type: "FOLLOW",
               actorId: followerId,
               recipientId: followingId,
             },
           });
-          await db.user.update({
+          await tx.user.update({
             where: { id: followerId },
             data: { following: { increment: 1 } },
           });
-          await db.user.update({
+          await tx.user.update({
             where: { id: followingId },
             data: { followers: { increment: 1 } },
           });
-          return success(reply, { followed: true }, "关注成功");
-        }
+          return true;
+        });
+
+        return success(
+          reply,
+          { followed },
+          followed ? "关注成功" : "取消关注成功",
+        );
       } catch (err) {
         fastify.log.error(err);
         return error(reply, "操作失败");
@@ -388,7 +396,7 @@ const userRoutes = async (fastify, options) => {
       return paginated(reply, users, users.length);
     } catch (err) {
       fastify.log.error(err);
-      return error(reply, "搜索失败", "SEARCH_FAILED");
+      return error(reply, "搜索失败", 500);
     }
   });
 

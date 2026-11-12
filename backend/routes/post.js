@@ -4,7 +4,6 @@ const {
   optionalAuth,
   success,
   created,
-  createdWithId,
   noContent,
   error,
   notFound,
@@ -37,29 +36,34 @@ const postRoutes = async (fastify, options) => {
         const { userId } = await request.jwtVerify();
         const { content, image, parent_id } = request.body;
 
-        const post = await db.post.create({
-          data: { content, image, userId, parentId: parent_id },
-        });
-
-        if (parent_id) {
-          const parentPost = await db.post.update({
-            where: { id: parent_id },
-            data: { repliesCount: { increment: 1 } },
+        const post = await db.$transaction(async (tx) => {
+          const createdPost = await tx.post.create({
+            data: { content, image, userId, parentId: parent_id },
+            include: { user: true },
           });
 
-          if (parentPost.userId !== userId) {
-            await db.notification.create({
-              data: {
-                type: "REPLY",
-                postId: post.id,
-                actorId: userId,
-                recipientId: parentPost.userId,
-              },
+          if (parent_id) {
+            const parentPost = await tx.post.update({
+              where: { id: parent_id },
+              data: { repliesCount: { increment: 1 } },
             });
-          }
-        }
 
-        return createdWithId(reply, post.id, "发布成功");
+            if (parentPost.userId !== userId) {
+              await tx.notification.create({
+                data: {
+                  type: "REPLY",
+                  postId: createdPost.id,
+                  actorId: userId,
+                  recipientId: parentPost.userId,
+                },
+              });
+            }
+          }
+
+          return createdPost;
+        });
+
+        return created(reply, formatPost(post, userId), "发布成功");
       } catch (err) {
         fastify.log.error(err);
         return error(reply, "服务器内部错误");
@@ -245,7 +249,7 @@ const postRoutes = async (fastify, options) => {
         return noContent(reply);
       } catch (err) {
         fastify.log.error(err);
-        return error(reply, "操作失败", "OPERATION_FAILED");
+        return error(reply, "操作失败", 500);
       }
     },
   );
@@ -293,7 +297,7 @@ const postRoutes = async (fastify, options) => {
         return success(reply, { reposted: true }, "转发成功");
       } catch (err) {
         fastify.log.error(err);
-        return error(reply, "操作失败", "OPERATION_FAILED");
+        return error(reply, "操作失败", 500);
       }
     },
   );
@@ -330,7 +334,7 @@ const postRoutes = async (fastify, options) => {
         return noContent(reply);
       } catch (err) {
         fastify.log.error(err);
-        return error(reply, "操作失败", "OPERATION_FAILED");
+        return error(reply, "操作失败", 500);
       }
     },
   );
@@ -453,7 +457,7 @@ const postRoutes = async (fastify, options) => {
         const post = await db.post.findUnique({ where: { id: postId } });
 
         if (!post) {
-          return notFound(reply, "帖子不存在", "POST_NOT_FOUND");
+          return notFound(reply, "帖子不存在");
         }
 
         if (post.userId !== userId) {
@@ -505,7 +509,7 @@ const postRoutes = async (fastify, options) => {
         return success(reply, { liked: true }, "点赞成功");
       }
     } catch (err) {
-      return error(reply, "操作失败", "OPERATION_FAILED");
+      return error(reply, "操作失败", 500);
     }
   });
 
@@ -545,7 +549,7 @@ const postRoutes = async (fastify, options) => {
         return success(reply, { reposted: true }, "转发成功");
       }
     } catch (err) {
-      return error(reply, "操作失败", "OPERATION_FAILED");
+      return error(reply, "操作失败", 500);
     }
   });
 };

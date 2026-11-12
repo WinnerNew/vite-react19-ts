@@ -29,8 +29,8 @@ const HomeView: React.FC<HomeViewProps> = ({ currentUser }) => {
     if (!composeText.trim() || isComposing) return;
     setIsComposing(true);
     try {
-      const newPost = await postApi.createPost(composeText);
-      setPosts((prev) => [newPost, ...prev]);
+      await postApi.createPost(composeText);
+      await refreshPosts();
       setComposeText("");
     } catch (error) {
       const errorMessage =

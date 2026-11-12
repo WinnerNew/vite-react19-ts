@@ -7,7 +7,6 @@ import viteCompression from "vite-plugin-compression";
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
-  console.log("Loaded env:", env);
   return {
     server: {
       port: Number(env.VITE_PORT) || 3000,
@@ -18,7 +17,6 @@ export default defineConfig(({ mode }) => {
           target: "http://localhost:3001",
           changeOrigin: true,
           secure: false,
-          rewrite: (path) => path.replace(/^\/api/, ""),
         },
       },
     },

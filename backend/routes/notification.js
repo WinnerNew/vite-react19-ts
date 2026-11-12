@@ -145,7 +145,7 @@ const notificationRoutes = async (fastify, options) => {
         return success(reply, { success: true }, "标记已读成功");
       } catch (err) {
         fastify.log.error(err);
-        return error(reply, "标记已读失败", "MARK_READ_FAILED");
+        return error(reply, "标记已读失败", 500);
       }
     },
   );
@@ -170,7 +170,7 @@ const notificationRoutes = async (fastify, options) => {
         });
 
         if (!notification) {
-          return notFound(reply, "通知不存在", "NOTIFICATION_NOT_FOUND");
+          return notFound(reply, "通知不存在");
         }
 
         await db.notification.delete({ where: { id } });
@@ -194,7 +194,7 @@ const notificationRoutes = async (fastify, options) => {
       return success(reply, { success: true }, "标记已读成功");
     } catch (err) {
       fastify.log.error(err);
-      return error(reply, "标记已读失败", "MARK_READ_FAILED");
+      return error(reply, "标记已读失败", 500);
     }
   });
 };

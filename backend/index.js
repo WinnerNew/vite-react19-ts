@@ -7,9 +7,13 @@ const dotenv = require("dotenv");
 // 加载环境变量
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set before starting the API server");
+}
+
 // 配置CORS
 fastify.register(require("@fastify/cors"), {
-  origin: "*", // 在生产环境中应该设置具体的前端域名
+  origin: process.env.FRONTEND_ORIGIN || true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,

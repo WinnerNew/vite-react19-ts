@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const getToken = (): string | null => {
   return localStorage.getItem("token");
@@ -34,6 +34,11 @@ export async function request<T>(
     ...options,
     headers,
   });
+
+  // DELETE endpoints intentionally return 204 with no JSON body.
+  if (response.status === 204) {
+    return undefined as T;
+  }
 
   const data = await response.json().catch(() => ({}));
 

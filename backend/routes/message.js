@@ -224,7 +224,7 @@ const messageRoutes = async (fastify, options) => {
         const chat = await validateChatAccess(chat_id, userId, true);
 
         if (!chat) {
-          return notFound(reply, "聊天不存在", "CHAT_NOT_FOUND");
+          return notFound(reply, "聊天不存在");
         }
 
         const message = await db.message.create({
@@ -269,7 +269,7 @@ const messageRoutes = async (fastify, options) => {
       return paginated(reply, formattedChats, formattedChats.length);
     } catch (err) {
       fastify.log.error(err);
-      return error(reply, "获取聊天列表失败", "CHATS_FAILED");
+      return error(reply, "获取聊天列表失败", 500);
     }
   });
 };
